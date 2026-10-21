@@ -293,3 +293,68 @@ h2 {
 .form__actions .input {
   flex: 1;
 }
+
+.list {
+  display: grid;
+  gap: 12px;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+
+.card__title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--on-surface);
+}
+
+.card__meta {
+  display: block;
+  margin-top: 4px;
+}
+
+a.card {
+  display: block;
+  text-decoration: none;
+}
+
+a.card:hover {
+  background: color-mix(in srgb, var(--surface-container) 88%, var(--on-surface));
+}
+
+.card--row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.card__note {
+  display: block;
+  margin-top: 8px;
+  color: var(--on-surface);
+}
+
+.spinner {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+  animation: spin 1s linear infinite;
+  color: var(--primary);
+}
+
+@keyframes spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
+
+.review__meta {
+  margin: 0 0 8px;
+  font-size: 14px;
+  color: var(--on-surface-variant);
+}
+
+.review__text {
+  white-space: pre-wrap;
+}

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Revisão - localᴚevisor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <header class="app-bar">
+      <div class="app-bar__leading">
+        <a class="icon-button" href="{{ url_for('index') }}" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" />
+          </svg>
+        </a>
+        <h1>Revisão</h1>
+      </div>
+    </header>
+
+    <main>
+      <h2>{{ correction["theme"] }}</h2>
+      <p class="review__meta">
+        {{ correction["filename"] }} · {{ correction["created_at"] }}
+      </p>
+
+      {% if correction["status"] == "pendente" %}
+      <p class="card">Correção ainda não processada.</p>
+      {% endif %}
+
+      <h2>Explicação</h2>
+      {% if correction["explanation"] %}
+      <p class="card review__text">{{ correction["explanation"] }}</p>
+      {% else %}
+      <p class="card">Sem explicação registrada.</p>
+      {% endif %}
+
+      <h2>Erros apontados</h2>
+      {% if correction["errors"] %}
+      <p class="card review__text">{{ correction["errors"] }}</p>
+      {% else %}
+      <p class="card">Nenhum erro registrado.</p>
+      {% endif %}
+    </main>
+  </body>
+</html>

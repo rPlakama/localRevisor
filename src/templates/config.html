@@ -44,10 +44,19 @@
             id="api_key"
             name="api_key"
             type="password"
-            value="{{ api_key }}"
             autocomplete="off"
+            placeholder="Usar OPENAI_API_KEY"
           />
-          <span class="field__hint">Não é salva em disco.</span>
+          <span class="field__hint">
+            {% if key_configured %}
+            Configurada via OPENAI_API_KEY.
+            {% elif key_entered %}
+            Chave já informada, mas indisponível para uso. Defina OPENAI_API_KEY.
+            {% else %}
+            Nenhuma chave configurada. Defina OPENAI_API_KEY.
+            {% endif %}
+            Nunca é salva em texto claro.
+          </span>
         </div>
 
         <div class="form__actions">
@@ -61,27 +70,49 @@
           <select
             name="correction_model"
             aria-label="Modelo de correção"
-            required
+            {% if model_options %}required{% endif %}
           >
-            {% for option in correction_options %}
+            {% if not model_options %}
+            <option value="" selected>Conecte para listar modelos</option>
+            {% endif %}
+            {% for option in model_options %}
             <option value="{{ option }}" {% if option == correction_model %}selected{% endif %}>
               {{ option }}
             </option>
             {% endfor %}
           </select>
-          <span class="field__hint">A lista virá da conexão com a API.</span>
+          <span class="field__hint">
+            {% if model_options %}
+            Lista carregada pela conexão.
+            {% else %}
+            Conecte-se para carregar a lista.
+            {% endif %}
+          </span>
         </div>
 
         <h2>API -- Modelo de imagem</h2>
         <div class="field">
-          <select name="image_model" aria-label="Modelo de imagem" required>
-            {% for option in image_options %}
+          <select
+            name="image_model"
+            aria-label="Modelo de imagem"
+            {% if model_options %}required{% endif %}
+          >
+            {% if not model_options %}
+            <option value="" selected>Conecte para listar modelos</option>
+            {% endif %}
+            {% for option in model_options %}
             <option value="{{ option }}" {% if option == image_model %}selected{% endif %}>
               {{ option }}
             </option>
             {% endfor %}
           </select>
-          <span class="field__hint">A lista virá da conexão com a API.</span>
+          <span class="field__hint">
+            {% if model_options %}
+            Lista carregada pela conexão.
+            {% else %}
+            Conecte-se para carregar a lista.
+            {% endif %}
+          </span>
         </div>
 
         <div class="form__actions">

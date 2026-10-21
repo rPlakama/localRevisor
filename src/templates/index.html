@@ -20,7 +20,46 @@
 
     <main>
       <h2>Últimas correções</h2>
+      {% if corrections %}
+      <ul class="list">
+        {% for correction in corrections %}
+        <li>
+          {% if correction["status"] == "corrigindo" %}
+          <div class="card card--row">
+            <div>
+              <span class="card__title">{{ correction["theme"] }}</span>
+              <span class="card__meta">{{ correction["filename"] }}</span>
+            </div>
+            <svg class="spinner" viewBox="0 0 24 24" role="status" aria-label="Em correção">
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-dasharray="42 14"
+                stroke-linecap="round"
+              />
+            </svg>
+          </div>
+          {% else %}
+          <a class="card card--row" href="{{ url_for('review', correction_id=correction['id']) }}">
+            <div>
+              <span class="card__title">{{ correction["theme"] }}</span>
+              <span class="card__meta">{{ correction["filename"] }}</span>
+              {% if correction["status"] == "corrigido" and correction["note"] %}
+              <span class="card__note">{{ correction["note"] }}</span>
+              {% endif %}
+            </div>
+          </a>
+          {% endif %}
+        </li>
+        {% endfor %}
+      </ul>
+      {% else %}
       <p class="card">Nenhuma correção por aqui ainda.</p>
+      {% endif %}
     </main>
 
     <a class="fab" href="{{ url_for('upload') }}">
