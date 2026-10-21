@@ -235,7 +235,8 @@ h2 {
 }
 
 .field input,
-.field select {
+.field select,
+.input {
   height: 56px;
   padding: 0 16px;
   border: 1px solid var(--outline);
@@ -244,6 +245,7 @@ h2 {
   color: var(--on-surface);
   font: inherit;
   font-size: 16px;
+  min-width: 0;
 }
 
 .field select {
@@ -251,7 +253,8 @@ h2 {
 }
 
 .field input:focus,
-.field select:focus {
+.field select:focus,
+.input:focus {
   border-color: var(--primary);
   outline: 2px solid var(--primary);
   outline-offset: -1px;
@@ -279,4 +282,14 @@ h2 {
 
 .form h2 {
   margin: 8px 0 0;
+}
+
+.button:disabled {
+  background: color-mix(in srgb, var(--on-surface) 12%, transparent);
+  color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+  cursor: not-allowed;
+}
+
+.form__actions .input {
+  flex: 1;
 }

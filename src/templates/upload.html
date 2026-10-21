@@ -21,18 +21,44 @@
     <main>
       <form class="upload-form" method="post" enctype="multipart/form-data">
         <label class="dropzone">
-          <input type="file" name="file" required />
+          <input id="file" type="file" name="file" required />
           <span class="dropzone__title">Escolher arquivo</span>
           <span class="dropzone__hint">Selecione o arquivo que será corrigido</span>
         </label>
-        <button class="button" type="submit">Enviar</button>
+
+        <div class="form__actions">
+          <input
+            class="input"
+            id="theme"
+            name="theme"
+            type="text"
+            placeholder="Tema"
+            aria-label="Tema"
+            required
+          />
+          <button class="button" id="submit" type="submit">Enviar</button>
+        </div>
       </form>
 
       {% if error %}
       <p class="card card--error">{{ error }}</p>
       {% elif filename %}
-      <p class="card">Arquivo recebido: {{ filename }}</p>
+      <p class="card">Arquivo recebido: {{ filename }} — Tema: {{ theme }}</p>
       {% endif %}
+
+      <script>
+        const fileInput = document.getElementById("file");
+        const themeInput = document.getElementById("theme");
+        const submitButton = document.getElementById("submit");
+
+        function syncSubmit() {
+          submitButton.disabled = !fileInput.files.length || !themeInput.value.trim();
+        }
+
+        fileInput.addEventListener("change", syncSubmit);
+        themeInput.addEventListener("input", syncSubmit);
+        syncSubmit();
+      </script>
     </main>
   </body>
 </html>

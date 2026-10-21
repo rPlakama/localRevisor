@@ -30,12 +30,16 @@ def index():
 def upload():
     error = None
     filename = None
+    theme = None
     if request.method == "POST":
         file = request.files.get("file")
         filename = file.filename if file else None
+        theme = request.form.get("theme", "").strip()
         if not filename:
             error = "Selecione um arquivo."
-    return render_template("upload.html", error=error, filename=filename)
+        elif not theme:
+            error = "Informe o tema."
+    return render_template("upload.html", error=error, filename=filename, theme=theme)
 
 
 @app.route("/config", methods=["GET", "POST"])
