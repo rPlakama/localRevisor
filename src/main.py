@@ -11,9 +11,12 @@ from pathlib import Path
 from uuid import uuid4
 
 import pypdf
+from dotenv import load_dotenv
 from flask import Flask, abort, redirect, render_template, request, url_for
 from openai import OpenAI, OpenAIError
 from werkzeug.utils import secure_filename
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -30,6 +33,12 @@ DEFAULT_SETTINGS = {
 
 ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt"}
 TEXT_EXTENSIONS = {".md", ".txt"}
+
+VISION_MODEL = "deepseek-v4-flash-vision-exp"
+
+TRANSCRIBE_PROMPT = """Transcreva fielmente o conteúdo da imagem ou documento,
+em português, sem comentários, correções ou formatação extra.
+Responda apenas com a transcrição."""
 
 REVIEW_PROMPT = """Você é um corretor de redações do ENEM em português.
 Avalie a redação considerando o tema informado e regras do ENEM, quais são:
@@ -151,43 +160,69 @@ def parse_review(content):
     )
 
 
-def request_review(theme, path):
-    settings = get_settings()
+def api_client():
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
         app.logger.warning("OPENAI_API_KEY não configurada.")
-    client = OpenAI(api_key=api_key or "local", base_url=settings["base_url"])
-    if path.suffix.lower() in TEXT_EXTENSIONS or path.suffix.lower() == ".pdf":
-        model = settings["correction_model"]
-        if not model:
-            raise ValueError("Nenhum modelo de correção configurado.")
-        text = extract_text(path)
-        if not text:
-            raise ValueError("Não foi possível extrair texto do arquivo.")
-        messages = [
-            {"role": "system", "content": REVIEW_PROMPT},
-            {"role": "user", "content": f"Tema: {theme}\n\nRedação:\n{text}"},
-        ]
+    return OpenAI(
+        api_key=api_key or "local", base_url=get_settings()["base_url"]
+    )
+
+
+def transcribe(path):
+    model = get_settings()["image_model"] or VISION_MODEL
+    if path.suffix.lower() == ".pdf":
+        mime = "application/pdf"
     else:
-        model = settings["image_model"]
-        if not model:
-            raise ValueError("Nenhum modelo de imagem configurado.")
         mime = mimetypes.guess_type(path.name)[0] or "image/png"
-        encoded = base64.b64encode(path.read_bytes()).decode()
-        messages = [
-            {"role": "system", "content": REVIEW_PROMPT},
+    encoded = base64.b64encode(path.read_bytes()).decode()
+    response = api_client().chat.completions.create(
+        model=model,
+        messages=[
+            {"role": "system", "content": TRANSCRIBE_PROMPT},
             {
                 "role": "user",
                 "content": [
-                    {"type": "text", "text": f"Tema: {theme}"},
                     {
                         "type": "image_url",
                         "image_url": {"url": f"data:{mime};base64,{encoded}"},
-                    },
+                    }
                 ],
             },
-        ]
-    response = client.chat.completions.create(model=model, messages=messages)
+        ],
+    )
+    return response.choices[0].message.content.strip()
+
+
+def obtain_text(path):
+    suffix = path.suffix.lower()
+    if suffix in TEXT_EXTENSIONS:
+        text = path.read_text(errors="replace").strip()
+    else:
+        text = ""
+        if suffix == ".pdf":
+            try:
+                text = extract_text(path)
+            except Exception:
+                app.logger.exception("Falha ao extrair texto de %s", path.name)
+        if not text:
+            app.logger.warning("Transcrevendo %s com %s", path.name, VISION_MODEL)
+            text = transcribe(path).strip()
+    if not text:
+        raise ValueError("Não foi possível extrair texto do arquivo.")
+    return text
+
+
+def request_review(theme, path):
+    settings = get_settings()
+    model = settings["correction_model"]
+    if not model:
+        raise ValueError("Nenhum modelo de correção configurado.")
+    messages = [
+        {"role": "system", "content": REVIEW_PROMPT},
+        {"role": "user", "content": f"Tema: {theme}\n\nRedação:\n{obtain_text(path)}"},
+    ]
+    response = api_client().chat.completions.create(model=model, messages=messages)
     return parse_review(response.choices[0].message.content)
 
 
