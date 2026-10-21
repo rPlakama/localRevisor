@@ -316,7 +316,11 @@ init_db()
 
 @app.route("/")
 def index():
-    return render_template("index.html", corrections=recent_corrections())
+    corrections = recent_corrections()
+    pending = any(c["status"] == "corrigindo" for c in corrections)
+    return render_template(
+        "index.html", corrections=corrections, pending=pending
+    )
 
 
 @app.route("/review/<int:correction_id>")
@@ -351,6 +355,16 @@ def retry(correction_id):
         ),
         daemon=True,
     ).start()
+    return redirect(url_for("index"))
+
+
+@app.route("/correction/<int:correction_id>/delete", methods=["POST"])
+def delete_correction(correction_id):
+    rows = query("SELECT stored_name FROM corrections WHERE id = ?", (correction_id,))
+    if not rows:
+        abort(404)
+    execute("DELETE FROM corrections WHERE id = ?", (correction_id,))
+    (UPLOAD_DIR / rows[0]["stored_name"]).unlink(missing_ok=True)
     return redirect(url_for("index"))
 
 

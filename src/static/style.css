@@ -424,3 +424,9 @@ h2 {
 [hidden] {
   display: none !important;
 }
+
+.card__actions {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}

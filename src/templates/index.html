@@ -5,6 +5,9 @@
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>localᴚevisor</title>
     <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    {% if pending %}
+    <meta http-equiv="refresh" content="2" />
+    {% endif %}
   </head>
   <body>
     <header class="app-bar">
@@ -29,18 +32,6 @@
             <span class="card__title">{{ correction["theme"] }}</span>
             <span class="card__meta">{{ correction["filename"] }}</span>
           </div>
-          <svg class="spinner" viewBox="0 0 24 24" role="status" aria-label="Em correção">
-            <circle
-              cx="12"
-              cy="12"
-              r="9"
-              fill="none"
-              stroke="currentColor"
-              stroke-width="2"
-              stroke-dasharray="42 14"
-              stroke-linecap="round"
-            />
-          </svg>
           {% else %}
           <a class="card__body" href="{{ url_for('review', correction_id=correction['id']) }}">
             <span class="card__title">{{ correction["theme"] }}</span>
@@ -51,18 +42,48 @@
             <span class="card__note card__note--error">Falha na correção</span>
             {% endif %}
           </a>
-          {% if correction["status"] == "erro" %}
-          <form method="post" action="{{ url_for('retry', correction_id=correction['id']) }}">
-            <button class="icon-button" type="submit" aria-label="Tentar novamente">
-              <svg viewBox="0 0 24 24" aria-hidden="true">
-                <path
-                  d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
-                />
-              </svg>
-            </button>
-          </form>
           {% endif %}
-          {% endif %}
+
+          <div class="card__actions">
+            {% if correction["status"] == "corrigindo" %}
+            <svg class="spinner" viewBox="0 0 24 24" role="status" aria-label="Em correção">
+              <circle
+                cx="12"
+                cy="12"
+                r="9"
+                fill="none"
+                stroke="currentColor"
+                stroke-width="2"
+                stroke-dasharray="42 14"
+                stroke-linecap="round"
+              />
+            </svg>
+            {% elif correction["status"] == "erro" %}
+            <form method="post" action="{{ url_for('retry', correction_id=correction['id']) }}">
+              <button class="icon-button" type="submit" aria-label="Tentar novamente">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                  />
+                </svg>
+              </button>
+            </form>
+            {% endif %}
+
+            <form
+              method="post"
+              action="{{ url_for('delete_correction', correction_id=correction['id']) }}"
+              onsubmit="return confirm('Excluir esta correção?')"
+            >
+              <button class="icon-button" type="submit" aria-label="Excluir">
+                <svg viewBox="0 0 24 24" aria-hidden="true">
+                  <path
+                    d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"
+                  />
+                </svg>
+              </button>
+            </form>
+          </div>
         </li>
         {% endfor %}
       </ul>
