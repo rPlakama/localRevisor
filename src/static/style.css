@@ -1,0 +1,282 @@
+:root {
+  --primary: #6750a4;
+  --on-primary: #ffffff;
+  --primary-container: #eaddff;
+  --on-primary-container: #21005d;
+  --on-surface: #1d1b20;
+  --on-surface-variant: #49454f;
+  --surface: #fef7ff;
+  --surface-container: #f3edf7;
+  --outline: #79747e;
+  --outline-variant: #cac4d0;
+  --error: #b3261e;
+  --shape-large: 16px;
+  color-scheme: light;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  min-height: 100dvh;
+  background: var(--surface);
+  color: var(--on-surface);
+  font-family: "Roboto", system-ui, sans-serif;
+}
+
+.app-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  height: 64px;
+  padding: 0 16px;
+  background: var(--surface);
+}
+
+.app-bar__leading {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.app-bar h1 {
+  margin: 0;
+  overflow: hidden;
+  font-size: 22px;
+  font-weight: 400;
+  line-height: 28px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: var(--on-surface);
+}
+
+.icon-button {
+  display: grid;
+  place-items: center;
+  width: 48px;
+  height: 48px;
+  flex-shrink: 0;
+  border: none;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--on-surface-variant);
+  cursor: pointer;
+}
+
+a.icon-button {
+  text-decoration: none;
+}
+
+.icon-button:hover {
+  background: color-mix(in srgb, var(--on-surface) 8%, transparent);
+}
+
+.icon-button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.icon-button svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+main {
+  max-width: 720px;
+  margin: 0 auto;
+  padding: 8px 16px 104px;
+}
+
+h2 {
+  margin: 16px 0 12px;
+  font-size: 16px;
+  font-weight: 500;
+  line-height: 24px;
+  color: var(--on-surface-variant);
+}
+
+.card {
+  margin: 0;
+  padding: 24px;
+  border-radius: var(--shape-large);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  font-size: 14px;
+  line-height: 20px;
+}
+
+.card--error {
+  color: var(--error);
+}
+
+.fab {
+  position: fixed;
+  right: 24px;
+  bottom: 24px;
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  height: 56px;
+  padding: 0 20px;
+  border-radius: var(--shape-large);
+  background: var(--primary-container);
+  color: var(--on-primary-container);
+  font-size: 14px;
+  font-weight: 500;
+  text-decoration: none;
+  box-shadow:
+    0 4px 8px 3px rgb(0 0 0 / 0.15),
+    0 1px 3px rgb(0 0 0 / 0.3);
+}
+
+.fab:hover {
+  background: color-mix(in srgb, var(--primary-container) 90%, var(--on-primary-container));
+}
+
+.fab:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 4px;
+}
+
+.fab svg {
+  width: 24px;
+  height: 24px;
+  fill: currentColor;
+}
+
+.upload-form {
+  display: grid;
+  gap: 16px;
+  margin-top: 16px;
+}
+
+.dropzone {
+  display: grid;
+  gap: 4px;
+  padding: 32px 24px;
+  border: 1px dashed var(--outline);
+  border-radius: var(--shape-large);
+  background: var(--surface-container);
+  color: var(--on-surface-variant);
+  text-align: center;
+  cursor: pointer;
+}
+
+.dropzone:focus-within {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.dropzone input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  padding: 0;
+  margin: -1px;
+  overflow: hidden;
+  clip: rect(0, 0, 0, 0);
+  border: 0;
+}
+
+.dropzone__title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--on-surface);
+}
+
+.dropzone__hint {
+  font-size: 14px;
+}
+
+.button {
+  justify-self: start;
+  height: 40px;
+  padding: 0 24px;
+  border: none;
+  border-radius: 20px;
+  background: var(--primary);
+  color: var(--on-primary);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.button:hover {
+  background: color-mix(in srgb, var(--primary) 90%, black);
+}
+
+.button:focus-visible {
+  outline: 2px solid var(--primary);
+  outline-offset: 2px;
+}
+
+.form {
+  display: grid;
+  gap: 24px;
+  margin-top: 16px;
+}
+
+.field {
+  display: grid;
+  gap: 4px;
+}
+
+.field label {
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--on-surface-variant);
+  letter-spacing: 0.4px;
+}
+
+.field input,
+.field select {
+  height: 56px;
+  padding: 0 16px;
+  border: 1px solid var(--outline);
+  border-radius: 4px;
+  background: transparent;
+  color: var(--on-surface);
+  font: inherit;
+  font-size: 16px;
+}
+
+.field select {
+  cursor: pointer;
+}
+
+.field input:focus,
+.field select:focus {
+  border-color: var(--primary);
+  outline: 2px solid var(--primary);
+  outline-offset: -1px;
+}
+
+.field__hint {
+  font-size: 12px;
+  color: var(--on-surface-variant);
+}
+
+.form__actions {
+  display: flex;
+  gap: 12px;
+}
+
+.button--outlined {
+  border: 1px solid var(--outline-variant);
+  background: transparent;
+  color: var(--primary);
+}
+
+.button--outlined:hover {
+  background: color-mix(in srgb, var(--primary) 8%, transparent);
+}
+
+.form h2 {
+  margin: 8px 0 0;
+}

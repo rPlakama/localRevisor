@@ -1,0 +1,93 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Configurações - localᴚevisor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <header class="app-bar">
+      <div class="app-bar__leading">
+        <a class="icon-button" href="{{ url_for('index') }}" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" />
+          </svg>
+        </a>
+        <h1>Configurações</h1>
+      </div>
+    </header>
+
+    <main>
+      {% if message %}
+      <p class="card">{{ message }}</p>
+      {% endif %}
+
+      <form class="form" method="post">
+        <h2>API</h2>
+
+        <div class="field">
+          <label for="base_url">URL base</label>
+          <input
+            id="base_url"
+            name="base_url"
+            type="url"
+            value="{{ base_url }}"
+            required
+          />
+          <span class="field__hint">Endpoint compatível com a API da OpenAI.</span>
+        </div>
+
+        <div class="field">
+          <label for="api_key">Chave da API</label>
+          <input
+            id="api_key"
+            name="api_key"
+            type="password"
+            value="{{ api_key }}"
+            autocomplete="off"
+          />
+          <span class="field__hint">Não é salva em disco.</span>
+        </div>
+
+        <div class="form__actions">
+          <button class="button button--outlined" type="submit" name="action" value="connect">
+            Conectar
+          </button>
+        </div>
+
+        <h2>API -- Modelo de correção</h2>
+        <div class="field">
+          <select
+            name="correction_model"
+            aria-label="Modelo de correção"
+            required
+          >
+            {% for option in correction_options %}
+            <option value="{{ option }}" {% if option == correction_model %}selected{% endif %}>
+              {{ option }}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="field__hint">A lista virá da conexão com a API.</span>
+        </div>
+
+        <h2>API -- Modelo de imagem</h2>
+        <div class="field">
+          <select name="image_model" aria-label="Modelo de imagem" required>
+            {% for option in image_options %}
+            <option value="{{ option }}" {% if option == image_model %}selected{% endif %}>
+              {{ option }}
+            </option>
+            {% endfor %}
+          </select>
+          <span class="field__hint">A lista virá da conexão com a API.</span>
+        </div>
+
+        <div class="form__actions">
+          <button class="button" type="submit" name="action" value="save">Salvar</button>
+        </div>
+      </form>
+    </main>
+  </body>
+</html>

@@ -1,0 +1,38 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Nova correção - localᴚevisor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+  </head>
+  <body>
+    <header class="app-bar">
+      <div class="app-bar__leading">
+        <a class="icon-button" href="{{ url_for('index') }}" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" />
+          </svg>
+        </a>
+        <h1>Nova correção</h1>
+      </div>
+    </header>
+
+    <main>
+      <form class="upload-form" method="post" enctype="multipart/form-data">
+        <label class="dropzone">
+          <input type="file" name="file" required />
+          <span class="dropzone__title">Escolher arquivo</span>
+          <span class="dropzone__hint">Selecione o arquivo que será corrigido</span>
+        </label>
+        <button class="button" type="submit">Enviar</button>
+      </form>
+
+      {% if error %}
+      <p class="card card--error">{{ error }}</p>
+      {% elif filename %}
+      <p class="card">Arquivo recebido: {{ filename }}</p>
+      {% endif %}
+    </main>
+  </body>
+</html>
