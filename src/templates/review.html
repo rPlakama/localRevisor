@@ -24,7 +24,11 @@
         {{ correction["filename"] }} · {{ correction["created_at"] }}
       </p>
 
-      {% if correction["status"] == "pendente" %}
+      {% if correction["status"] == "erro" %}
+      <p class="card card--error">
+        A correção falhou. Veja os detalhes em “Erros apontados”.
+      </p>
+      {% elif correction["status"] == "pendente" %}
       <p class="card">Correção ainda não processada.</p>
       {% endif %}
 

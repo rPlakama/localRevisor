@@ -23,36 +23,45 @@
       {% if corrections %}
       <ul class="list">
         {% for correction in corrections %}
-        <li>
+        <li class="card card--row">
           {% if correction["status"] == "corrigindo" %}
-          <div class="card card--row">
-            <div>
-              <span class="card__title">{{ correction["theme"] }}</span>
-              <span class="card__meta">{{ correction["filename"] }}</span>
-            </div>
-            <svg class="spinner" viewBox="0 0 24 24" role="status" aria-label="Em correção">
-              <circle
-                cx="12"
-                cy="12"
-                r="9"
-                fill="none"
-                stroke="currentColor"
-                stroke-width="2"
-                stroke-dasharray="42 14"
-                stroke-linecap="round"
-              />
-            </svg>
+          <div class="card__body">
+            <span class="card__title">{{ correction["theme"] }}</span>
+            <span class="card__meta">{{ correction["filename"] }}</span>
           </div>
+          <svg class="spinner" viewBox="0 0 24 24" role="status" aria-label="Em correção">
+            <circle
+              cx="12"
+              cy="12"
+              r="9"
+              fill="none"
+              stroke="currentColor"
+              stroke-width="2"
+              stroke-dasharray="42 14"
+              stroke-linecap="round"
+            />
+          </svg>
           {% else %}
-          <a class="card card--row" href="{{ url_for('review', correction_id=correction['id']) }}">
-            <div>
-              <span class="card__title">{{ correction["theme"] }}</span>
-              <span class="card__meta">{{ correction["filename"] }}</span>
-              {% if correction["status"] == "corrigido" and correction["note"] %}
-              <span class="card__note">{{ correction["note"] }}</span>
-              {% endif %}
-            </div>
+          <a class="card__body" href="{{ url_for('review', correction_id=correction['id']) }}">
+            <span class="card__title">{{ correction["theme"] }}</span>
+            <span class="card__meta">{{ correction["filename"] }}</span>
+            {% if correction["status"] == "corrigido" and correction["note"] %}
+            <span class="card__note">{{ correction["note"] }}</span>
+            {% elif correction["status"] == "erro" %}
+            <span class="card__note card__note--error">Falha na correção</span>
+            {% endif %}
           </a>
+          {% if correction["status"] == "erro" %}
+          <form method="post" action="{{ url_for('retry', correction_id=correction['id']) }}">
+            <button class="icon-button" type="submit" aria-label="Tentar novamente">
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path
+                  d="M17.65 6.35A7.95 7.95 0 0 0 12 4a8 8 0 1 0 8 8h-2a6 6 0 1 1-6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"
+                />
+              </svg>
+            </button>
+          </form>
+          {% endif %}
           {% endif %}
         </li>
         {% endfor %}

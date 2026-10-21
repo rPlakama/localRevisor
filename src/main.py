@@ -1,12 +1,16 @@
+import base64
 import hashlib
 import json
+import mimetypes
 import os
 import sqlite3
+import threading
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
 from uuid import uuid4
 
+import pypdf
 from flask import Flask, abort, redirect, render_template, request, url_for
 from openai import OpenAI, OpenAIError
 from werkzeug.utils import secure_filename
@@ -25,6 +29,13 @@ DEFAULT_SETTINGS = {
 }
 
 ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt"}
+TEXT_EXTENSIONS = {".md", ".txt"}
+
+REVIEW_PROMPT = """Você é um corretor de redações em português.
+Avalie a redação considerando o tema informado.
+Responda somente com JSON válido, sem markdown, no formato:
+{"note": "nota de 0 a 1000", "explanation": "explicação detalhada", "errors": ["erro 1", "erro 2"]}
+"""
 
 
 def query(sql, params=()):
@@ -35,7 +46,7 @@ def query(sql, params=()):
 
 def execute(sql, params=()):
     with closing(sqlite3.connect(DB_PATH)) as conn, conn:
-        conn.execute(sql, params)
+        return conn.execute(sql, params).lastrowid
 
 
 def init_db():
@@ -109,6 +120,88 @@ def fetch_models(base_url, api_key):
     return sorted(model.id for model in client.models.list())
 
 
+def extract_text(path):
+    if path.suffix.lower() == ".pdf":
+        reader = pypdf.PdfReader(path)
+        return "\n".join(page.extract_text() or "" for page in reader.pages).strip()
+    return path.read_text(errors="replace").strip()
+
+
+def parse_review(content):
+    text = content.strip()
+    if text.startswith("```"):
+        text = text.strip("`")
+        text = text.removeprefix("json")
+    data = json.loads(text)
+    if not isinstance(data, dict):
+        raise TypeError("Formato inesperado na resposta do modelo.")
+    errors = data.get("errors", "")
+    if isinstance(errors, list):
+        errors = "\n".join(f"- {item}" for item in errors)
+    return (
+        str(data.get("note", "")).strip(),
+        str(data.get("explanation", "")).strip(),
+        errors.strip(),
+    )
+
+
+def request_review(theme, path):
+    settings = get_settings()
+    api_key = os.environ.get("OPENAI_API_KEY", "")
+    if not api_key:
+        app.logger.warning("OPENAI_API_KEY não configurada.")
+    client = OpenAI(api_key=api_key or "local", base_url=settings["base_url"])
+    if path.suffix.lower() in TEXT_EXTENSIONS or path.suffix.lower() == ".pdf":
+        model = settings["correction_model"]
+        if not model:
+            raise ValueError("Nenhum modelo de correção configurado.")
+        text = extract_text(path)
+        if not text:
+            raise ValueError("Não foi possível extrair texto do arquivo.")
+        messages = [
+            {"role": "system", "content": REVIEW_PROMPT},
+            {"role": "user", "content": f"Tema: {theme}\n\nRedação:\n{text}"},
+        ]
+    else:
+        model = settings["image_model"]
+        if not model:
+            raise ValueError("Nenhum modelo de imagem configurado.")
+        mime = mimetypes.guess_type(path.name)[0] or "image/png"
+        encoded = base64.b64encode(path.read_bytes()).decode()
+        messages = [
+            {"role": "system", "content": REVIEW_PROMPT},
+            {
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": f"Tema: {theme}"},
+                    {
+                        "type": "image_url",
+                        "image_url": {"url": f"data:{mime};base64,{encoded}"},
+                    },
+                ],
+            },
+        ]
+    response = client.chat.completions.create(model=model, messages=messages)
+    return parse_review(response.choices[0].message.content)
+
+
+def process_correction(correction_id, theme, path):
+    try:
+        note, explanation, errors = request_review(theme, path)
+    except Exception as exc:  # never leave the row stuck in "corrigindo"
+        app.logger.exception("Falha na correção %s", correction_id)
+        execute(
+            "UPDATE corrections SET status = 'erro', errors = ? WHERE id = ?",
+            (f"Falha na correção: {exc}", correction_id),
+        )
+    else:
+        execute(
+            "UPDATE corrections SET status = 'corrigido', note = ?,"
+            " explanation = ?, errors = ? WHERE id = ?",
+            (note, explanation, errors, correction_id),
+        )
+
+
 init_db()
 
 
@@ -125,6 +218,31 @@ def review(correction_id):
     if rows[0]["status"] == "corrigindo":
         return redirect(url_for("index"))
     return render_template("review.html", correction=rows[0])
+
+
+@app.route("/correction/<int:correction_id>/retry", methods=["POST"])
+def retry(correction_id):
+    rows = query("SELECT * FROM corrections WHERE id = ?", (correction_id,))
+    if not rows:
+        abort(404)
+    correction = rows[0]
+    if correction["status"] == "corrigindo":
+        return redirect(url_for("index"))
+    execute(
+        "UPDATE corrections SET status = 'corrigindo', note = '',"
+        " explanation = '', errors = '' WHERE id = ?",
+        (correction_id,),
+    )
+    threading.Thread(
+        target=process_correction,
+        args=(
+            correction_id,
+            correction["theme"],
+            UPLOAD_DIR / correction["stored_name"],
+        ),
+        daemon=True,
+    ).start()
+    return redirect(url_for("index"))
 
 
 @app.route("/upload", methods=["GET", "POST"])
@@ -147,9 +265,10 @@ def upload():
             safe_name = secure_filename(filename) or "arquivo"
             stored_name = f"{uuid4().hex}_{safe_name}"
             file.save(UPLOAD_DIR / stored_name)
-            execute(
-                "INSERT INTO corrections (filename, stored_name, theme, created_at)"
-                " VALUES (?, ?, ?, ?)",
+            correction_id = execute(
+                "INSERT INTO corrections"
+                " (filename, stored_name, theme, created_at, status)"
+                " VALUES (?, ?, ?, ?, 'corrigindo')",
                 (
                     filename,
                     stored_name,
@@ -157,6 +276,11 @@ def upload():
                     datetime.now().strftime("%d/%m/%Y %H:%M"),
                 ),
             )
+            threading.Thread(
+                target=process_correction,
+                args=(correction_id, theme, UPLOAD_DIR / stored_name),
+                daemon=True,
+            ).start()
             return redirect(url_for("index"))
     return render_template("upload.html", error=error)
 
