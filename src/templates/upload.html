@@ -20,11 +20,32 @@
 
     <main>
       <form class="upload-form" method="post" enctype="multipart/form-data">
-        <label class="dropzone">
-          <input id="file" type="file" name="file" accept=".pdf,image/*,.md,.txt" required />
+        <div class="segmented">
+          <label class="segment">
+            <input type="radio" name="source" value="file" checked />
+            <span>Arquivo</span>
+          </label>
+          <label class="segment">
+            <input type="radio" name="source" value="text" />
+            <span>Texto</span>
+          </label>
+        </div>
+
+        <label class="dropzone" id="dropzone">
+          <input id="file" type="file" name="file" accept=".pdf,image/*,.md,.txt" />
           <span class="dropzone__title">Escolher arquivo</span>
           <span class="dropzone__hint">PDF, imagem, Markdown ou texto</span>
         </label>
+
+        <div class="field" id="text-field" hidden>
+          <textarea
+            class="textarea"
+            id="text"
+            name="text"
+            placeholder="Cole sua redação aqui"
+            aria-label="Texto"
+          ></textarea>
+        </div>
 
         <div class="form__actions">
           <input
@@ -45,17 +66,36 @@
       {% endif %}
 
       <script>
+        const sourceInputs = document.querySelectorAll('input[name="source"]');
+        const dropzone = document.getElementById("dropzone");
+        const textField = document.getElementById("text-field");
+        const textInput = document.getElementById("text");
         const fileInput = document.getElementById("file");
         const themeInput = document.getElementById("theme");
         const submitButton = document.getElementById("submit");
 
-        function syncSubmit() {
-          submitButton.disabled = !fileInput.files.length || !themeInput.value.trim();
+        function isTextMode() {
+          return document.querySelector('input[name="source"]:checked').value === "text";
         }
 
+        function syncSubmit() {
+          const hasContent = isTextMode()
+            ? !!textInput.value.trim()
+            : !!fileInput.files.length;
+          submitButton.disabled = !hasContent || !themeInput.value.trim();
+        }
+
+        function syncSource() {
+          dropzone.hidden = isTextMode();
+          textField.hidden = !isTextMode();
+          syncSubmit();
+        }
+
+        sourceInputs.forEach((input) => input.addEventListener("change", syncSource));
         fileInput.addEventListener("change", syncSubmit);
+        textInput.addEventListener("input", syncSubmit);
         themeInput.addEventListener("input", syncSubmit);
-        syncSubmit();
+        syncSource();
       </script>
     </main>
   </body>

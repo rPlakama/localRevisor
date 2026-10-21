@@ -16,6 +16,7 @@
         buildInputs = with pkgs; [
           python314
           ruff
+          ffmpeg
           uv
           vscode-html-languageserver
           vscode-css-languageserver

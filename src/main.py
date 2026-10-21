@@ -4,10 +4,13 @@ import json
 import mimetypes
 import os
 import sqlite3
+import subprocess
+import tempfile
 import threading
 from contextlib import closing
 from datetime import datetime
 from pathlib import Path
+from urllib.parse import urlparse
 from uuid import uuid4
 
 import pypdf
@@ -23,6 +26,7 @@ app = Flask(__name__)
 DATA_DIR = Path(app.root_path).parent / "data"
 UPLOAD_DIR = DATA_DIR / "uploads"
 DB_PATH = DATA_DIR / "app.db"
+ENV_PATH = Path(app.root_path).parent / ".env"
 
 DEFAULT_SETTINGS = {
     "base_url": os.environ.get("OPENAI_BASE_URL", "https://api.deepseek.com"),
@@ -33,6 +37,7 @@ DEFAULT_SETTINGS = {
 
 ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt"}
 TEXT_EXTENSIONS = {".md", ".txt"}
+IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
 
 VISION_MODEL = "deepseek-v4-flash-vision-exp"
 
@@ -109,6 +114,19 @@ def hash_key(key):
     return hashlib.sha256(key.encode()).hexdigest()
 
 
+def save_api_key(key):
+    lines = ENV_PATH.read_text().splitlines() if ENV_PATH.exists() else []
+    lines = [
+        line
+        for line in lines
+        if not line.lstrip().removeprefix("export ").startswith("OPENAI_API_KEY=")
+    ]
+    lines.append(f"OPENAI_API_KEY={key}")
+    ENV_PATH.write_text("\n".join(lines) + "\n")
+    ENV_PATH.chmod(0o600)
+    os.environ["OPENAI_API_KEY"] = key
+
+
 def get_settings():
     rows = query("SELECT key, value FROM settings")
     return {row["key"]: row["value"] for row in rows}
@@ -161,21 +179,52 @@ def parse_review(content):
 
 
 def api_client():
+    base_url = get_settings()["base_url"]
     api_key = os.environ.get("OPENAI_API_KEY", "")
     if not api_key:
-        app.logger.warning("OPENAI_API_KEY não configurada.")
-    return OpenAI(
-        api_key=api_key or "local", base_url=get_settings()["base_url"]
-    )
+        if urlparse(base_url).hostname not in ("localhost", "127.0.0.1", "::1"):
+            raise ValueError(
+                "OPENAI_API_KEY não configurada. Defina-a no .env e reinicie."
+            )
+        app.logger.warning("OPENAI_API_KEY não configurada; usando endpoint local.")
+    return OpenAI(api_key=api_key or "local", base_url=base_url)
+
+
+def convert_to_png(path):
+    with tempfile.NamedTemporaryFile(
+        suffix=".png", dir=UPLOAD_DIR, delete=False
+    ) as handle:
+        target = Path(handle.name)
+    try:
+        subprocess.run(
+            ["ffmpeg", "-y", "-i", str(path), str(target)],
+            check=True,
+            capture_output=True,
+        )
+    except FileNotFoundError as exc:
+        target.unlink(missing_ok=True)
+        raise RuntimeError("ffmpeg não encontrado para converter a imagem.") from exc
+    except subprocess.CalledProcessError as exc:
+        target.unlink(missing_ok=True)
+        raise RuntimeError("Falha ao converter a imagem para PNG.") from exc
+    return target
 
 
 def transcribe(path):
     model = get_settings()["image_model"] or VISION_MODEL
+    converted = None
     if path.suffix.lower() == ".pdf":
+        source = path
         mime = "application/pdf"
-    else:
+    elif path.suffix.lower() in IMAGE_EXTENSIONS:
+        source = path
         mime = mimetypes.guess_type(path.name)[0] or "image/png"
-    encoded = base64.b64encode(path.read_bytes()).decode()
+    else:
+        source = converted = convert_to_png(path)
+        mime = "image/png"
+    encoded = base64.b64encode(source.read_bytes()).decode()
+    if converted:
+        converted.unlink(missing_ok=True)
     response = api_client().chat.completions.create(
         model=model,
         messages=[
@@ -224,6 +273,25 @@ def request_review(theme, path):
     ]
     response = api_client().chat.completions.create(model=model, messages=messages)
     return parse_review(response.choices[0].message.content)
+
+
+def start_correction(filename, stored_name, theme):
+    correction_id = execute(
+        "INSERT INTO corrections"
+        " (filename, stored_name, theme, created_at, status)"
+        " VALUES (?, ?, ?, ?, 'corrigindo')",
+        (
+            filename,
+            stored_name,
+            theme,
+            datetime.now().strftime("%d/%m/%Y %H:%M"),
+        ),
+    )
+    threading.Thread(
+        target=process_correction,
+        args=(correction_id, theme, UPLOAD_DIR / stored_name),
+        daemon=True,
+    ).start()
 
 
 def process_correction(correction_id, theme, path):
@@ -290,52 +358,56 @@ def retry(correction_id):
 def upload():
     error = None
     if request.method == "POST":
-        file = request.files.get("file")
         theme = request.form.get("theme", "").strip()
-        filename = file.filename if file else None
-        if not filename:
-            error = "Selecione um arquivo."
-        elif os.path.splitext(filename)[
-            1
-        ].lower() not in ALLOWED_EXTENSIONS and not file.mimetype.startswith("image/"):
-            error = "Formato não suportado. Envie PDF, imagem, .md ou .txt."
-        elif not theme:
-            error = "Informe o tema."
+        if request.form.get("source") == "text":
+            text = request.form.get("text", "").strip()
+            if not text:
+                error = "Cole o texto."
+            elif not theme:
+                error = "Informe o tema."
+            else:
+                stored_name = f"{uuid4().hex}_texto.txt"
+                (UPLOAD_DIR / stored_name).write_text(text)
+                start_correction("Texto colado.txt", stored_name, theme)
+                return redirect(url_for("index"))
         else:
-            safe_name = secure_filename(filename) or "arquivo"
-            stored_name = f"{uuid4().hex}_{safe_name}"
-            file.save(UPLOAD_DIR / stored_name)
-            correction_id = execute(
-                "INSERT INTO corrections"
-                " (filename, stored_name, theme, created_at, status)"
-                " VALUES (?, ?, ?, ?, 'corrigindo')",
-                (
-                    filename,
-                    stored_name,
-                    theme,
-                    datetime.now().strftime("%d/%m/%Y %H:%M"),
-                ),
-            )
-            threading.Thread(
-                target=process_correction,
-                args=(correction_id, theme, UPLOAD_DIR / stored_name),
-                daemon=True,
-            ).start()
-            return redirect(url_for("index"))
+            file = request.files.get("file")
+            filename = file.filename if file else None
+            if not filename:
+                error = "Selecione um arquivo."
+            elif (
+                os.path.splitext(filename)[1].lower() not in ALLOWED_EXTENSIONS
+                and not file.mimetype.startswith("image/")
+            ):
+                error = "Formato não suportado. Envie PDF, imagem, .md ou .txt."
+            elif not theme:
+                error = "Informe o tema."
+            else:
+                safe_name = secure_filename(filename) or "arquivo"
+                stored_name = f"{uuid4().hex}_{safe_name}"
+                file.save(UPLOAD_DIR / stored_name)
+                start_correction(filename, stored_name, theme)
+                return redirect(url_for("index"))
     return render_template("upload.html", error=error)
 
 
 @app.route("/config", methods=["GET", "POST"])
 def config():
     message = None
+    key_error = False
     settings = get_settings()
     if request.method == "POST":
         settings["base_url"] = request.form.get("base_url", "").strip()
         settings["correction_model"] = request.form.get("correction_model", "").strip()
         settings["image_model"] = request.form.get("image_model", "").strip()
         entered_key = request.form.get("api_key", "").strip()
+        if any(char.isspace() for char in entered_key):
+            key_error = True
+            entered_key = ""
         if entered_key:
             settings["api_key_hash"] = hash_key(entered_key)
+            if request.remote_addr in ("127.0.0.1", "::1"):
+                save_api_key(entered_key)
 
         if request.form.get("action") == "connect":
             if not settings["base_url"]:
@@ -348,24 +420,41 @@ def config():
                     message = f"Não foi possível conectar: {exc}"
                 else:
                     settings["models"] = json.dumps(models)
-                    for field in ("correction_model", "image_model"):
-                        if settings[field] not in models:
-                            settings[field] = models[0] if models else ""
+                    deepseek = "deepseek" in settings["base_url"].lower()
+                    if settings["correction_model"] not in models:
+                        settings["correction_model"] = models[0] if models else ""
+                    if settings["image_model"] not in models:
+                        if deepseek:
+                            settings["image_model"] = VISION_MODEL
+                        else:
+                            settings["image_model"] = models[0] if models else ""
                     message = f"Conectado. {len(models)} modelo(s) encontrado(s)."
         else:
             message = "Configurações salvas."
         save_settings(settings)
+        if key_error:
+            message = "Chave da API inválida."
 
-    model_options = json.loads(settings["models"])
-    for field in ("correction_model", "image_model"):
-        if settings[field] and settings[field] not in model_options:
-            model_options.insert(0, settings[field])
+    models = json.loads(settings["models"])
+    deepseek = "deepseek" in settings["base_url"].lower()
+    correction_options = list(models)
+    image_options = list(models)
+    if deepseek and VISION_MODEL not in image_options:
+        image_options.insert(0, VISION_MODEL)
+    if (
+        settings["correction_model"]
+        and settings["correction_model"] not in correction_options
+    ):
+        correction_options.insert(0, settings["correction_model"])
+    if settings["image_model"] and settings["image_model"] not in image_options:
+        image_options.insert(0, settings["image_model"])
     return render_template(
         "config.html",
         base_url=settings["base_url"],
         key_configured=bool(os.environ.get("OPENAI_API_KEY")),
         key_entered=bool(settings.get("api_key_hash")),
-        model_options=model_options,
+        correction_options=correction_options,
+        image_options=image_options,
         correction_model=settings["correction_model"],
         image_model=settings["image_model"],
         message=message,

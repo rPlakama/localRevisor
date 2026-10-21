@@ -49,13 +49,13 @@
           />
           <span class="field__hint">
             {% if key_configured %}
-            Configurada via OPENAI_API_KEY.
+            Chave configurada.
             {% elif key_entered %}
-            Chave já informada, mas indisponível para uso. Defina OPENAI_API_KEY.
+            Chave já salva.
             {% else %}
-            Nenhuma chave configurada. Defina OPENAI_API_KEY.
+            Nenhuma chave configurada.
             {% endif %}
-            Nunca é salva em texto claro.
+            Ao salvar em localhost, grava em .env (ignorado pelo git).
           </span>
         </div>
 
@@ -70,19 +70,19 @@
           <select
             name="correction_model"
             aria-label="Modelo de correção"
-            {% if model_options %}required{% endif %}
+            {% if correction_options %}required{% endif %}
           >
-            {% if not model_options %}
+            {% if not correction_options %}
             <option value="" selected>Conecte para listar modelos</option>
             {% endif %}
-            {% for option in model_options %}
+            {% for option in correction_options %}
             <option value="{{ option }}" {% if option == correction_model %}selected{% endif %}>
               {{ option }}
             </option>
             {% endfor %}
           </select>
           <span class="field__hint">
-            {% if model_options %}
+            {% if correction_options %}
             Lista carregada pela conexão.
             {% else %}
             Conecte-se para carregar a lista.
@@ -95,19 +95,19 @@
           <select
             name="image_model"
             aria-label="Modelo de imagem"
-            {% if model_options %}required{% endif %}
+            {% if image_options %}required{% endif %}
           >
-            {% if not model_options %}
+            {% if not image_options %}
             <option value="" selected>Conecte para listar modelos</option>
             {% endif %}
-            {% for option in model_options %}
+            {% for option in image_options %}
             <option value="{{ option }}" {% if option == image_model %}selected{% endif %}>
               {{ option }}
             </option>
             {% endfor %}
           </select>
           <span class="field__hint">
-            {% if model_options %}
+            {% if image_options %}
             Lista carregada pela conexão.
             {% else %}
             Conecte-se para carregar a lista.
