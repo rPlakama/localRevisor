@@ -31,10 +31,16 @@ DEFAULT_SETTINGS = {
 ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt"}
 TEXT_EXTENSIONS = {".md", ".txt"}
 
-REVIEW_PROMPT = """Você é um corretor de redações em português.
-Avalie a redação considerando o tema informado.
+REVIEW_PROMPT = """Você é um corretor de redações do ENEM em português.
+Avalie a redação considerando o tema informado e regras do ENEM, quais são:
+A prova de redação exigirá de você a produção de um texto dissertativo-argumentativo, em modalidade escrita formal da língua portuguesa, sobre um tema de ordem social, científica, cultural ou política. Os aspectos a serem avaliados relacionam-se às competências que devem ter sido desenvolvidas ao longo de sua formação, ou seja, ao final do ensino médio. Nessa redação, você deverá defender um ponto de vista — uma opinião a respeito do tema proposto —, apoiada em argumentos consistentes,  estruturados com coerência e coesão, formando uma unidade textual. Para tanto, deverá selecionar, organizar e relacionar, também de forma coerente e coesa, argumentos e fatos para a defesa do seu ponto de vista. Você também deverá e laborar uma proposta de intervenção social para o problema apresentado no desenvolvimento do texto. Por fim, essa proposta deve respeitar os direitos humanos. [...]
+Tal que ignore a quantidade de linha, já que por ser um produto em texto digital, é ignorado a sua extensão (pela caligrafia humana variar). Além disso, a nota é uma junção de cinco competências, sendo elas: • Competência 1: Domínio da norma culta da língua escrita (gramática, ortografia e sintaxe).
+• Competência 2: Compreensão do tema e aplicação de repertório sociocultural produtivo.
+• Competência 3: Capacidade de interpretar, selecionar, relacionar e organizar informações em defesa de um ponto de vista.
+• Competência 4: Uso de recursos coesivos (conectivos) para articular as ideias do texto.
+• Competência 5: Elaboração de uma proposta de intervenção para o problema abordado, respeitando os direitos humanos.
 Responda somente com JSON válido, sem markdown, no formato:
-{"note": "nota de 0 a 1000", "explanation": "explicação detalhada", "errors": ["erro 1", "erro 2"]}
+{"note": "nota de 0 a 1000", "explanation": "explicação detalhada em topicos", "errors": ["erro 1", "erro 2"]}
 """
 
 
@@ -254,10 +260,9 @@ def upload():
         filename = file.filename if file else None
         if not filename:
             error = "Selecione um arquivo."
-        elif (
-            os.path.splitext(filename)[1].lower() not in ALLOWED_EXTENSIONS
-            and not file.mimetype.startswith("image/")
-        ):
+        elif os.path.splitext(filename)[
+            1
+        ].lower() not in ALLOWED_EXTENSIONS and not file.mimetype.startswith("image/"):
             error = "Formato não suportado. Envie PDF, imagem, .md ou .txt."
         elif not theme:
             error = "Informe o tema."
@@ -291,9 +296,7 @@ def config():
     settings = get_settings()
     if request.method == "POST":
         settings["base_url"] = request.form.get("base_url", "").strip()
-        settings["correction_model"] = request.form.get(
-            "correction_model", ""
-        ).strip()
+        settings["correction_model"] = request.form.get("correction_model", "").strip()
         settings["image_model"] = request.form.get("image_model", "").strip()
         entered_key = request.form.get("api_key", "").strip()
         if entered_key:
