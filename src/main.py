@@ -13,6 +13,8 @@ app.config["OPENAI_API_KEY"] = os.environ.get("OPENAI_API_KEY", "")
 
 MODEL_PLACEHOLDER = ["deepseek-flash", "deepseek-chat"]
 
+ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt"}
+
 
 def model_options(model):
     options = list(MODEL_PLACEHOLDER)
@@ -37,6 +39,11 @@ def upload():
         theme = request.form.get("theme", "").strip()
         if not filename:
             error = "Selecione um arquivo."
+        elif (
+            os.path.splitext(filename)[1].lower() not in ALLOWED_EXTENSIONS
+            and not file.mimetype.startswith("image/")
+        ):
+            error = "Formato não suportado. Envie PDF, imagem, .md ou .txt."
         elif not theme:
             error = "Informe o tema."
     return render_template("upload.html", error=error, filename=filename, theme=theme)
