@@ -115,6 +115,28 @@
           </span>
         </div>
 
+        <h2>Notas por competência</h2>
+        <div class="field">
+          <label class="check">
+            <input
+              type="checkbox"
+              name="use_bert"
+              value="1"
+              {% if use_bert %}checked{% endif %}
+              {% if not bert_available %}disabled{% endif %}
+            />
+            <span>Usar o BERTimbau para estimar as notas</span>
+          </label>
+          <span class="field__hint">
+            {% if bert_available %}
+            Ligado: o BERTimbau estima as notas de C1 a C5 e a IA escolhida explica cada nota.
+            Desligado: a IA escolhida faz toda a correção.
+            {% else %}
+            Indisponível: {{ bert_reason }}
+            {% endif %}
+          </span>
+        </div>
+
         <div class="form__actions">
           <button class="button" type="submit" name="action" value="save">Salvar</button>
         </div>

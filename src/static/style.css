@@ -430,3 +430,28 @@ h2 {
   align-items: center;
   gap: 4px;
 }
+
+.field .check {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  font-size: 16px;
+  font-weight: 400;
+  letter-spacing: 0;
+  color: var(--on-surface);
+  cursor: pointer;
+}
+
+.field .check input {
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  accent-color: var(--primary);
+  cursor: pointer;
+}
+
+.field .check input:disabled,
+.field .check input:disabled + span {
+  cursor: not-allowed;
+  color: color-mix(in srgb, var(--on-surface) 38%, transparent);
+}

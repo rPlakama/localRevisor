@@ -1,0 +1,8 @@
+# Dependências do modo BERT (opcional). Instale depois do requiriments.txt:
+#   pip install -r requirements-bert.txt
+huggingface_hub==2.4.0
+numpy==2.5.4
+safetensors==0.8.0
+tokenizers==0.23.3
+torch==2.15.0
+transformers==5.22.2

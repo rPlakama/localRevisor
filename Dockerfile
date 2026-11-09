@@ -9,8 +9,14 @@ RUN apt-get update \
 
 WORKDIR /app
 
-COPY requeriments.txt .
-RUN pip install --no-cache-dir -r requeriments.txt
+COPY requiriments.txt .
+RUN pip install --no-cache-dir -r requiriments.txt
+
+ARG INSTALAR_BERT=0
+RUN if [ "$INSTALAR_BERT" = "1" ]; then \
+      pip install --no-cache-dir torch --index-url https://download.pytorch.org/whl/cpu \
+      && pip install --no-cache-dir transformers numpy; \
+    fi
 
 COPY src ./src
 
