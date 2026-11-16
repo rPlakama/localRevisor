@@ -4,22 +4,41 @@
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>localᴚevisor</title>
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}" />
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=3) }}" />
     {% if pending %}
     <meta http-equiv="refresh" content="2" />
     {% endif %}
   </head>
   <body>
-    <header class="app-bar">
-      <h1>localᴚevisor</h1>
-      <a class="icon-button" href="{{ url_for('config') }}" aria-label="Configurações">
+    <header class="app-bar app-bar--home">
+      <button
+        class="icon-button menu-toggle"
+        id="menu-toggle"
+        type="button"
+        aria-label="Abrir menu"
+        aria-expanded="false"
+        aria-controls="main-menu"
+      >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path
-            d="M19.14 12.94c.04-.3.06-.61.06-.94 0-.32-.02-.64-.07-.94l2.03-1.58c.18-.14.23-.41.12-.61l-1.92-3.32c-.12-.22-.37-.29-.59-.22l-2.39.96c-.5-.38-1.03-.7-1.62-.94l-.36-2.54c-.04-.24-.24-.41-.48-.41h-3.84c-.24 0-.43.17-.47.41l-.36 2.54c-.59.24-1.13.57-1.62.94l-2.39-.96c-.22-.08-.47 0-.59.22L2.74 8.87c-.12.21-.08.47.12.61l2.03 1.58c-.05.3-.09.63-.09.94s.02.64.07.94l-2.03 1.58c-.18.14-.23.41-.12.61l1.92 3.32c.12.22.37.29.59.22l2.39-.96c.5.38 1.03.7 1.62.94l.36 2.54c.05.24.24.41.48.41h3.84c.24 0 .44-.17.47-.41l.36-2.54c.59-.24 1.13-.56 1.62-.94l2.39.96c.22.08.47 0 .59-.22l1.92-3.32c.12-.22.07-.47-.12-.61l-2.01-1.58zM12 15.6c-1.98 0-3.6-1.62-3.6-3.6s1.62-3.6 3.6-3.6 3.6 1.62 3.6 3.6-1.62 3.6-3.6 3.6z"
-          />
+          <path d="M4 6h16M4 12h16M4 18h16" />
         </svg>
-      </a>
+      </button>
+      <h1>localᴚevisor</h1>
     </header>
+
+    <button class="drawer-scrim" id="drawer-scrim" type="button" aria-label="Fechar menu" disabled></button>
+    <nav class="drawer" id="main-menu" aria-label="Navegação principal" aria-hidden="true" inert>
+      <div class="drawer__header">
+        <span class="drawer__title">Menu</span>
+        <button class="icon-button drawer__close" id="menu-close" type="button" aria-label="Fechar menu">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="m6 6 12 12M18 6 6 18" />
+          </svg>
+        </button>
+      </div>
+      <a class="drawer__link" href="{{ url_for('config') }}">Configurações</a>
+      <a class="drawer__link" href="{{ url_for('report_problem') }}">Feedback</a>
+    </nav>
 
     <main>
       <h2>Últimas correções</h2>
@@ -98,5 +117,43 @@
       </svg>
       Nova correção
     </a>
+
+    <script>
+      const menuToggle = document.getElementById("menu-toggle");
+      const menuClose = document.getElementById("menu-close");
+      const drawer = document.getElementById("main-menu");
+      const drawerScrim = document.getElementById("drawer-scrim");
+      const drawerLinks = drawer.querySelectorAll(".drawer__link");
+
+      function setMenuOpen(open) {
+        menuToggle.setAttribute("aria-expanded", String(open));
+        menuToggle.setAttribute("aria-label", open ? "Fechar menu" : "Abrir menu");
+        drawer.setAttribute("aria-hidden", String(!open));
+        drawer.toggleAttribute("inert", !open);
+        drawerScrim.disabled = !open;
+        drawerScrim.setAttribute("aria-hidden", String(!open));
+        document.body.classList.toggle("menu-open", open);
+
+        if (open) {
+          drawerLinks[0].focus();
+        } else {
+          menuToggle.focus();
+        }
+      }
+
+      menuToggle.addEventListener("click", () => {
+        setMenuOpen(menuToggle.getAttribute("aria-expanded") !== "true");
+      });
+      menuClose.addEventListener("click", () => setMenuOpen(false));
+      drawerScrim.addEventListener("click", () => setMenuOpen(false));
+      drawerLinks.forEach((link) => {
+        link.addEventListener("click", () => setMenuOpen(false));
+      });
+      document.addEventListener("keydown", (event) => {
+        if (event.key === "Escape" && menuToggle.getAttribute("aria-expanded") === "true") {
+          setMenuOpen(false);
+        }
+      });
+    </script>
   </body>
 </html>

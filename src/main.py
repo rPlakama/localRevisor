@@ -3,12 +3,16 @@ import hashlib
 import json
 import mimetypes
 import os
+import re
+import smtplib
 import sqlite3
+import ssl
 import subprocess
 import tempfile
 import threading
 from contextlib import closing
 from datetime import datetime
+from email.message import EmailMessage
 from pathlib import Path
 from urllib.parse import urlparse
 from uuid import uuid4
@@ -38,6 +42,15 @@ DEFAULT_SETTINGS = {
 ALLOWED_EXTENSIONS = {".pdf", ".md", ".txt"}
 TEXT_EXTENSIONS = {".md", ".txt"}
 IMAGE_EXTENSIONS = {".jpg", ".jpeg", ".png"}
+REPORT_CATEGORIES = (
+    "Erro no sistema",
+    "Problema ao avaliar redação",
+    "Problema ao salvar ou editar",
+    "Problema com arquivos ou imagens",
+    "Sugestão de melhoria",
+    "Outros",
+)
+REPORT_RECIPIENT = "marcusvssasis@gmail.com"
 
 VISION_MODEL = "deepseek-v4-flash-vision-exp"
 
@@ -275,6 +288,50 @@ def request_review(theme, path):
     return parse_review(response.choices[0].message.content)
 
 
+def send_problem_report(name, contact_email, category, description):
+    host = os.environ.get("SMTP_HOST", "").strip()
+    username = os.environ.get("SMTP_USERNAME", "").strip()
+    password = os.environ.get("SMTP_PASSWORD", "")
+    sender = os.environ.get("SMTP_FROM", "").strip() or username
+    if not host or not username or not password or not sender:
+        raise ValueError(
+            "Não foi possível enviar: SMTP não configurado. Defina "
+            "SMTP_HOST, SMTP_USERNAME e "
+            "SMTP_PASSWORD; SMTP_FROM é opcional e, quando omitido, usa "
+            "SMTP_USERNAME."
+        )
+
+    try:
+        port = int(os.environ.get("SMTP_PORT", "587"))
+    except ValueError as exc:
+        raise ValueError("SMTP_PORT deve ser um número.") from exc
+
+    tls_setting = os.environ.get("SMTP_USE_TLS", "true").strip().lower()
+    if tls_setting not in {"true", "false", "1", "0", "yes", "no", "on", "off"}:
+        raise ValueError("SMTP_USE_TLS deve indicar true ou false.")
+    use_tls = tls_setting in {"true", "1", "yes", "on"}
+
+    message = EmailMessage()
+    message["Subject"] = "Relato recebido pelo LocalRevisor"
+    message["From"] = sender
+    message["To"] = REPORT_RECIPIENT
+    if contact_email:
+        message["Reply-To"] = contact_email
+    message.set_content(
+        "Um relato foi enviado pelo formulário do LocalRevisor.\n\n"
+        f"Nome: {name or 'Não informado'}\n"
+        f"E-mail para contato: {contact_email or 'Não informado'}\n"
+        f"Categoria: {category}\n\n"
+        f"Descrição:\n{description}\n"
+    )
+
+    with smtplib.SMTP(host, port, timeout=20) as server:
+        if use_tls:
+            server.starttls(context=ssl.create_default_context())
+        server.login(username, password)
+        server.send_message(message)
+
+
 def start_correction(filename, stored_name, theme):
     correction_id = execute(
         "INSERT INTO corrections"
@@ -403,6 +460,61 @@ def upload():
                 start_correction(filename, stored_name, theme)
                 return redirect(url_for("index"))
     return render_template("upload.html", error=error)
+
+
+@app.route("/report-problem", methods=["GET", "POST"])
+def report_problem():
+    name = ""
+    contact_email = ""
+    category = ""
+    description = ""
+    error = None
+    sent = request.args.get("sent") == "1"
+
+    if request.method == "POST":
+        name = request.form.get("name", "").strip()
+        contact_email = request.form.get("email", "").strip()
+        category = request.form.get("category", "").strip()
+        description = request.form.get("description", "").strip()
+
+        if category not in REPORT_CATEGORIES:
+            error = "Selecione uma categoria válida."
+        elif not description:
+            error = "Descreva o problema."
+        elif len(name) > 120:
+            error = "O nome deve ter no máximo 120 caracteres."
+        elif len(contact_email) > 254 or (
+            contact_email
+            and not re.fullmatch(r"[^@\s]+@[^@\s]+\.[^@\s]+", contact_email)
+        ):
+            error = "Informe um e-mail válido para contato."
+        elif len(description) > 10000:
+            error = "A descrição deve ter no máximo 10.000 caracteres."
+        else:
+            try:
+                send_problem_report(name, contact_email, category, description)
+            except ValueError as exc:
+                app.logger.warning("Configuração inválida para relatos: %s", exc)
+                error = str(exc)
+            except (OSError, smtplib.SMTPException):
+                app.logger.exception("Falha ao enviar relato pelo formulário.")
+                error = (
+                    "Não foi possível enviar o relato. Verifique a configuração "
+                    "do e-mail e tente novamente."
+                )
+            else:
+                return redirect(url_for("report_problem", sent=1))
+
+    return render_template(
+        "report_problem.html",
+        categories=REPORT_CATEGORIES,
+        name=name,
+        contact_email=contact_email,
+        category=category,
+        description=description,
+        error=error,
+        sent=sent,
+    )
 
 
 @app.route("/config", methods=["GET", "POST"])

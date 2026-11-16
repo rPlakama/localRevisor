@@ -1,0 +1,100 @@
+<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Feedback - localᴚevisor</title>
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css', v=2) }}" />
+  </head>
+  <body>
+    <header class="app-bar">
+      <div class="app-bar__leading">
+        <a class="icon-button" href="{{ url_for('index') }}" aria-label="Voltar">
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <path d="M20 11H7.83l5.59-5.59L12 4l-8 8 8 8 1.41-1.41L7.83 13H20z" />
+          </svg>
+        </a>
+        <h1>Feedback</h1>
+      </div>
+    </header>
+
+    <main>
+      <p>Conte o que aconteceu para nos ajudar a melhorar o LocalRevisor.</p>
+
+      {% if sent %}
+      <p class="card" role="status">Seu relato foi encaminhado. Obrigado por nos ajudar!</p>
+      {% endif %}
+
+      {% if error %}
+      <p class="card card--error" role="alert">{{ error }}</p>
+      {% endif %}
+
+      <form class="form" id="report-form" method="post">
+        <div class="field">
+          <label for="name">Nome (opcional)</label>
+          <input
+            id="name"
+            name="name"
+            type="text"
+            maxlength="120"
+            autocomplete="name"
+            value="{{ name }}"
+          />
+        </div>
+
+        <div class="field">
+          <label for="email">E-mail para contato (opcional)</label>
+          <input
+            id="email"
+            name="email"
+            type="email"
+            maxlength="254"
+            autocomplete="email"
+            value="{{ contact_email }}"
+          />
+          <span class="field__hint">Se informado, será usado para responder ao seu relato.</span>
+        </div>
+
+        <div class="field">
+          <label for="category">Categoria do problema</label>
+          <select id="category" name="category" required>
+            <option value="" {% if not category %}selected{% endif %} disabled>
+              Selecione uma categoria
+            </option>
+            {% for option in categories %}
+            <option value="{{ option }}" {% if option == category %}selected{% endif %}>
+              {{ option }}
+            </option>
+            {% endfor %}
+          </select>
+        </div>
+
+        <div class="field">
+          <label for="description">Descrição detalhada</label>
+          <textarea
+            class="textarea"
+            id="description"
+            name="description"
+            rows="8"
+            maxlength="10000"
+            required
+          >{{ description }}</textarea>
+        </div>
+
+        <div class="form__actions">
+          <button class="button" id="report-submit" type="submit">Enviar relato</button>
+        </div>
+      </form>
+
+      <script>
+        const reportForm = document.getElementById("report-form");
+        const reportSubmit = document.getElementById("report-submit");
+
+        reportForm.addEventListener("submit", () => {
+          reportSubmit.disabled = true;
+          reportSubmit.textContent = "Enviando...";
+        });
+      </script>
+    </main>
+  </body>
+</html>
