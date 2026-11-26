@@ -187,6 +187,8 @@
         type="checkbox"
         name="client_wasm"
         value="1"
+        data-client-wasm-toggle
+        data-bert-available="{{ '1' if bert_available else '0' }}"
         {% if client_wasm %}checked{% endif %}
       />
       <span>Usar hardware (seu) para trabalhar com modelos</span>
@@ -201,8 +203,28 @@
     <label class="check">
       <input
         type="checkbox"
+        name="local_descriptor"
+        value="1"
+        data-local-descriptor-toggle
+        {% if local_descriptor %}checked{% endif %}
+        {% if not client_wasm %}disabled{% endif %}
+      />
+      <span>Descritor de Inferência Local</span>
+    </label>
+    <span class="field__hint">
+      Gera a explicação e os apontamentos da redação no seu hardware (via endpoint
+      local como Ollama/LM Studio no navegador ou descritor linguístico offline).
+      Só pode ser ativado com “Usar hardware (seu) para trabalhar com modelos”.
+    </span>
+  </div>
+
+  <div class="field">
+    <label class="check">
+      <input
+        type="checkbox"
         name="use_bert"
         value="1"
+        data-use-bert-toggle
         {% if use_bert %}checked{% endif %}
         {% if not bert_available and not client_wasm %}disabled{% endif %}
       />

@@ -41,6 +41,9 @@ def start(
     *,
     bert_only: bool = False,
     client_scores: dict[str, int] | None = None,
+    client_explanation: str | None = None,
+    client_errors: str = "",
+    client_descriptor_model: str | None = None,
 ) -> bool:
     """Agenda uma correção. Devolve False se ela já está na fila/execução."""
     with _active_lock:
@@ -49,7 +52,16 @@ def start(
         _active.add(correction_id)
     thread = threading.Thread(
         target=_run,
-        args=(correction_id, theme, stored_name, bert_only, client_scores),
+        args=(
+            correction_id,
+            theme,
+            stored_name,
+            bert_only,
+            client_scores,
+            client_explanation,
+            client_errors,
+            client_descriptor_model,
+        ),
         name=f"correcao-{correction_id}",
         daemon=True,
     )
@@ -68,6 +80,9 @@ def _run(
     stored_name: str,
     bert_only: bool = False,
     client_scores: dict[str, int] | None = None,
+    client_explanation: str | None = None,
+    client_errors: str = "",
+    client_descriptor_model: str | None = None,
 ) -> None:
     try:
         with _semaphore:
@@ -77,6 +92,9 @@ def _run(
                 stored_name,
                 bert_only=bert_only,
                 client_scores=client_scores,
+                client_explanation=client_explanation,
+                client_errors=client_errors,
+                client_descriptor_model=client_descriptor_model,
             )
     finally:
         with _active_lock:
@@ -99,6 +117,9 @@ def run_correction(
     *,
     bert_only: bool = False,
     client_scores: dict[str, int] | None = None,
+    client_explanation: str | None = None,
+    client_errors: str = "",
+    client_descriptor_model: str | None = None,
 ) -> None:
     """Executa uma correção de ponta a ponta. Também é usada nos testes."""
     row = db.get_correction(correction_id)
@@ -121,6 +142,11 @@ def run_correction(
             review_kwargs["bert_only"] = True
         if client_scores is not None:
             review_kwargs["client_scores"] = client_scores
+        if client_explanation:
+            review_kwargs["client_explanation"] = client_explanation
+            review_kwargs["client_errors"] = client_errors
+            if client_descriptor_model:
+                review_kwargs["client_descriptor_model"] = client_descriptor_model
         result = grading.review(theme, text, settings, **review_kwargs)
         db.finish_correction(
             correction_id,

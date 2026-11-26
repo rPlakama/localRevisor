@@ -151,8 +151,104 @@ function runWasmScore(instance, weights, features) {
   return scores;
 }
 
+function isLocalEndpoint(rawUrl) {
+  try {
+    const parsed = new URL(rawUrl);
+    return (
+      (parsed.protocol === "http:" || parsed.protocol === "https:") &&
+      (parsed.hostname === "localhost" || parsed.hostname === "127.0.0.1")
+    );
+  } catch {
+    return false;
+  }
+}
+
+function buildOfflineDescriptor(theme, scores, features) {
+  const [nWords, nParas, nSentences, wordsPerSentence, diversity, connectives, commas, proposal] = features;
+  const total = Object.values(scores).reduce((a, b) => a + b, 0);
+  const explanation = [
+    `Avaliação gerada localmente no seu hardware (Descritor de Inferência Local) para o tema "${theme || "ENEM"}".`,
+    `Nota total estimada: ${total}/1000 (C1: ${scores.C1}, C2: ${scores.C2}, C3: ${scores.C3}, C4: ${scores.C4}, C5: ${scores.C5}).`,
+    `Estrutura observada: ${Math.round(nWords)} palavras, ${Math.round(nParas)} parágrafo(s) e ${Math.round(nSentences)} frase(s) (média de ${wordsPerSentence.toFixed(1)} palavras/frase).`,
+    `Coesão e repertório lexical: diversidade vocabular de ${(diversity * 100).toFixed(1)}%, densidade de conectivos de ${connectives.toFixed(2)} por 100 palavras e ${commas.toFixed(2)} vírgulas por 100 palavras.`,
+    proposal > 0
+      ? `Proposta de intervenção: identificados ${Math.round(proposal)} marcador(es) de ação/intervenção no parágrafo final.`
+      : "Proposta de intervenção: não foram detectados marcadores explícitos de intervenção (agente, ação, meio e finalidade) no parágrafo final.",
+  ].join("\n");
+
+  const warnings = [];
+  if (nWords < 120) warnings.push("Texto curto: desenvolva mais os argumentos para fortalecer C2 e C3.");
+  if (nParas < 3) warnings.push("Organize o texto em introdução, desenvolvimento e conclusão (mínimo 3–4 parágrafos).");
+  if (connectives < 1.0) warnings.push("Amplie o uso de conectivos argumentativos (C4).");
+  if (proposal === 0) warnings.push("Inclua agente, ação, meio/modo, finalidade e detalhamento na conclusão (C5).");
+
+  return {
+    explanation,
+    errors: warnings.join("\n"),
+    descriptorModel: "wasm-local-descriptor",
+  };
+}
+
+async function tryLocalEndpointDescriptor(baseUrl, model, theme, text, scores) {
+  if (!isLocalEndpoint(baseUrl) || !model) {
+    return null;
+  }
+  const endpoint = `${baseUrl.replace(/\/+$/, "")}/chat/completions`;
+  const scoreSummary = Object.entries(scores)
+    .map(([k, v]) => `${k}: ${v}`)
+    .join(", ");
+  const resp = await fetch(endpoint, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      Authorization: "Bearer local",
+    },
+    body: JSON.stringify({
+      model,
+      temperature: 0,
+      messages: [
+        {
+          role: "system",
+          content:
+            "Você é um corretor de redações do ENEM. Responda em JSON com as chaves " +
+            '{"explanation": "...", "errors": "..."} explicando as notas C1-C5 em português.',
+        },
+        {
+          role: "user",
+          content: `Tema: ${theme}\nNotas: ${scoreSummary}\n\nRedação:\n${text}`,
+        },
+      ],
+    }),
+  });
+  if (!resp.ok) {
+    return null;
+  }
+  const data = await resp.json();
+  const content = data?.choices?.[0]?.message?.content || "";
+  if (!content.trim()) {
+    return null;
+  }
+  try {
+    const parsed = JSON.parse(content);
+    if (parsed && typeof parsed.explanation === "string") {
+      return {
+        explanation: parsed.explanation,
+        errors: typeof parsed.errors === "string" ? parsed.errors : "",
+        descriptorModel: model,
+      };
+    }
+  } catch {
+    // fallback para texto livre do modelo local
+  }
+  return {
+    explanation: content.trim(),
+    errors: "",
+    descriptorModel: model,
+  };
+}
+
 self.onmessage = async (event) => {
-  const { id, text } = event.data || {};
+  const { id, text, theme, localDescriptor, localBaseUrl, localModel } = event.data || {};
   try {
     const [instance, weights] = await Promise.all([
       getWasmInstance(),
@@ -160,7 +256,24 @@ self.onmessage = async (event) => {
     ]);
     const features = extractFeatures(text || "");
     const scores = runWasmScore(instance, weights, features);
-    self.postMessage({ id, ok: true, scores });
+    let descriptor = null;
+    if (localDescriptor) {
+      try {
+        descriptor = await tryLocalEndpointDescriptor(
+          localBaseUrl || "",
+          localModel || "",
+          theme || "",
+          text || "",
+          scores
+        );
+      } catch {
+        descriptor = null;
+      }
+      if (!descriptor) {
+        descriptor = buildOfflineDescriptor(theme || "", scores, features);
+      }
+    }
+    self.postMessage({ id, ok: true, scores, descriptor });
   } catch (err) {
     self.postMessage({
       id,

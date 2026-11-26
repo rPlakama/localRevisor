@@ -82,3 +82,24 @@ if (providerPreset && baseUrlInput) {
 
   updateHint();
 }
+
+const clientWasmToggle = document.querySelector("[data-client-wasm-toggle]");
+const localDescriptorToggle = document.querySelector("[data-local-descriptor-toggle]");
+const useBertToggle = document.querySelector("[data-use-bert-toggle]");
+
+if (clientWasmToggle) {
+  const serverBertAvailable = clientWasmToggle.dataset.bertAvailable === "1";
+  const syncHardwareOptions = () => {
+    const enabled = clientWasmToggle.checked;
+    if (localDescriptorToggle) {
+      localDescriptorToggle.disabled = !enabled;
+      if (!enabled) localDescriptorToggle.checked = false;
+    }
+    if (useBertToggle) {
+      useBertToggle.disabled = !enabled && !serverBertAvailable;
+      if (!enabled && !serverBertAvailable) useBertToggle.checked = false;
+    }
+  };
+  syncHardwareOptions();
+  clientWasmToggle.addEventListener("change", syncHardwareOptions);
+}

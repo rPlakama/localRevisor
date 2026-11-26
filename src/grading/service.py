@@ -60,10 +60,30 @@ def review(
     session_id: str | None = None,
     bert_only: bool = False,
     client_scores: dict[str, int] | None = None,
+    client_explanation: str | None = None,
+    client_errors: str = "",
+    client_descriptor_model: str | None = None,
 ) -> ReviewResult:
     if not text.strip():
         raise GradingError("A redação está vazia.")
     started = time.monotonic()
+
+    if client_scores is not None and client_explanation:
+        return ReviewResult(
+            note=sum(client_scores.values()),
+            scores=dict(client_scores),
+            explanation=client_explanation.strip(),
+            errors=(client_errors or "").strip(),
+            source_text=text,
+            score_mode="bert_wasm+local_descriptor",
+            model=client_descriptor_model or "wasm-local-descriptor",
+            provider="browser",
+            prompt_version="local-descriptor",
+            duration_ms=int((time.monotonic() - started) * 1000),
+            tokens_in=0,
+            tokens_out=0,
+            truncated=False,
+        )
 
     if bert_only:
         if client_scores is not None:

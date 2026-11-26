@@ -107,6 +107,11 @@ def register(app: Flask) -> None:
             settings["image_model"] = image_model
             client_wasm = "1" if request.form.get("client_wasm") else "0"
             settings["client_wasm"] = client_wasm
+            settings["local_descriptor"] = (
+                "1"
+                if client_wasm == "1" and request.form.get("local_descriptor")
+                else "0"
+            )
             settings["use_bert"] = (
                 "1"
                 if request.form.get("use_bert")
@@ -156,6 +161,9 @@ def register(app: Flask) -> None:
         )
         bert_token_options = sorted({*BERT_MAX_TOKEN_OPTIONS, bert_max_tokens})
         client_wasm_enabled = settings.get("client_wasm") == "1"
+        local_descriptor_enabled = (
+            client_wasm_enabled and settings.get("local_descriptor") == "1"
+        )
         bert_available = bert_notas.instalado()
         return render_template(
             "config.html",
@@ -169,6 +177,7 @@ def register(app: Flask) -> None:
             image_model=settings.get("image_model", ""),
             use_bert=settings.get("use_bert") == "1" and (bert_available or client_wasm_enabled),
             client_wasm=client_wasm_enabled,
+            local_descriptor=local_descriptor_enabled,
             bert_max_tokens=bert_max_tokens,
             bert_token_options=bert_token_options,
             bert_available=bert_available,

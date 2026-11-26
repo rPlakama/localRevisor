@@ -12,10 +12,20 @@
   method="post"
   enctype="multipart/form-data"
   {% if client_wasm %}data-client-wasm="1"{% endif %}
+  {% if local_descriptor %}
+  data-local-descriptor="1"
+  data-local-base-url="{{ local_base_url }}"
+  data-local-model="{{ local_model }}"
+  {% endif %}
 >
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
   {% if client_wasm %}
   <input type="hidden" name="client_scores" id="client-scores" value="" />
+  {% endif %}
+  {% if local_descriptor %}
+  <input type="hidden" name="client_explanation" id="client-explanation" value="" />
+  <input type="hidden" name="client_errors" id="client-errors" value="" />
+  <input type="hidden" name="client_descriptor_model" id="client-descriptor-model" value="" />
   {% endif %}
 
   <div class="segmented" role="group" aria-label="Origem do texto">

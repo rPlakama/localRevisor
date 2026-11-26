@@ -8,6 +8,9 @@
   const themeInput = document.getElementById("theme");
   const submitButton = document.getElementById("submit");
   const clientScoresInput = document.getElementById("client-scores");
+  const clientExplanationInput = document.getElementById("client-explanation");
+  const clientErrorsInput = document.getElementById("client-errors");
+  const clientDescriptorModelInput = document.getElementById("client-descriptor-model");
   const wasmStatus = document.getElementById("wasm-status");
 
   if (
@@ -23,6 +26,9 @@
   }
 
   const clientWasmEnabled = form.dataset.clientWasm === "1";
+  const localDescriptorEnabled = form.dataset.localDescriptor === "1";
+  const localBaseUrl = form.dataset.localBaseUrl || "";
+  const localModel = form.dataset.localModel || "";
   let wasmReadySubmitted = false;
 
   function isTextMode() {
@@ -56,7 +62,7 @@
     return "";
   }
 
-  function scoreWithWorker(text) {
+  function scoreWithWorker(text, theme) {
     return new Promise((resolve, reject) => {
       const worker = new Worker("/static/wasm_worker.js");
       const reqId = Date.now();
@@ -64,7 +70,7 @@
         worker.terminate();
         const data = event.data || {};
         if (data.id === reqId && data.ok) {
-          resolve(data.scores);
+          resolve(data);
         } else {
           reject(new Error(data.error || "Falha na inferência WebAssembly"));
         }
@@ -73,7 +79,14 @@
         worker.terminate();
         reject(new Error(err.message || "Erro no Worker WebAssembly"));
       };
-      worker.postMessage({ id: reqId, text });
+      worker.postMessage({
+        id: reqId,
+        text,
+        theme,
+        localDescriptor: localDescriptorEnabled,
+        localBaseUrl,
+        localModel,
+      });
     });
   }
 
@@ -87,12 +100,23 @@
       event.preventDefault();
       submitButton.disabled = true;
       if (wasmStatus) {
-        wasmStatus.textContent =
-          "Calculando notas C1–C5 no seu navegador via WebAssembly...";
+        wasmStatus.textContent = localDescriptorEnabled
+          ? "Calculando notas e descritor no seu navegador..."
+          : "Calculando notas C1–C5 no seu navegador via WebAssembly...";
       }
       try {
-        const scores = await scoreWithWorker(essayText);
-        clientScoresInput.value = JSON.stringify(scores);
+        const result = await scoreWithWorker(essayText, themeInput.value.trim());
+        clientScoresInput.value = JSON.stringify(result.scores);
+        if (result.descriptor && clientExplanationInput) {
+          clientExplanationInput.value = result.descriptor.explanation || "";
+          if (clientErrorsInput) {
+            clientErrorsInput.value = result.descriptor.errors || "";
+          }
+          if (clientDescriptorModelInput) {
+            clientDescriptorModelInput.value =
+              result.descriptor.descriptorModel || "";
+          }
+        }
         wasmReadySubmitted = true;
         form.submit();
       } catch (err) {

@@ -75,6 +75,9 @@ def _enqueue(
     *,
     bert_only: bool = False,
     client_scores: dict[str, int] | None = None,
+    client_explanation: str | None = None,
+    client_errors: str = "",
+    client_descriptor_model: str | None = None,
 ) -> bool:
     try:
         kwargs: dict[str, object] = {}
@@ -82,6 +85,11 @@ def _enqueue(
             kwargs["bert_only"] = True
         if client_scores is not None:
             kwargs["client_scores"] = client_scores
+        if client_explanation:
+            kwargs["client_explanation"] = client_explanation
+            kwargs["client_errors"] = client_errors
+            if client_descriptor_model:
+                kwargs["client_descriptor_model"] = client_descriptor_model
         started = worker.start(correction_id, theme, stored_name, **kwargs)
     except Exception as exc:
         LOGGER.exception("Falha ao iniciar a correção %s", correction_id)
@@ -208,6 +216,7 @@ def register(app: Flask) -> None:
         ai_configured = settings_configured(settings)
         bert_available = bert_notas.instalado()
         client_wasm = settings.get("client_wasm") == "1"
+        local_descriptor = client_wasm and settings.get("local_descriptor") == "1"
         if not ai_configured and not bert_available and not client_wasm:
             flash("Configure a IA, baixe o BERT ou ative o modo WebAssembly.", "warning")
             return redirect(url_for("config", setup=1))
@@ -218,12 +227,30 @@ def register(app: Flask) -> None:
         model_ready = bert_available or client_wasm
         bert_only = (
             model_ready
-            and (not ai_configured or request.form.get("bert_only") == "1")
+            and (
+                (not ai_configured and not local_descriptor)
+                or request.form.get("bert_only") == "1"
+            )
         )
         client_scores = (
             _parse_client_scores(request.form.get("client_scores"))
             if client_wasm
             else None
+        )
+        client_explanation = (
+            request.form.get("client_explanation", "").strip()
+            if local_descriptor
+            else ""
+        )
+        client_errors = (
+            request.form.get("client_errors", "").strip()
+            if local_descriptor
+            else ""
+        )
+        client_descriptor_model = (
+            request.form.get("client_descriptor_model", "").strip()
+            if local_descriptor
+            else ""
         )
         if request.method == "POST":
             if not theme:
@@ -243,6 +270,9 @@ def register(app: Flask) -> None:
                         stored_name,
                         bert_only=bert_only,
                         client_scores=client_scores,
+                        client_explanation=client_explanation or None,
+                        client_errors=client_errors,
+                        client_descriptor_model=client_descriptor_model or None,
                     ):
                         flash("Redação enviada. Correção em andamento.", "success")
                         return redirect(url_for("index"))
@@ -268,6 +298,9 @@ def register(app: Flask) -> None:
                             stored_name,
                             bert_only=bert_only,
                             client_scores=client_scores,
+                            client_explanation=client_explanation or None,
+                            client_errors=client_errors,
+                            client_descriptor_model=client_descriptor_model or None,
                         ):
                             flash("Redação enviada. Correção em andamento.", "success")
                             return redirect(url_for("index"))
@@ -283,6 +316,9 @@ def register(app: Flask) -> None:
             ai_configured=ai_configured,
             bert_available=model_ready,
             client_wasm=client_wasm,
+            local_descriptor=local_descriptor,
+            local_base_url=settings.get("base_url", ""),
+            local_model=settings.get("correction_model", ""),
             bert_only=bert_only,
             back_url=url_for("index"),
             max_upload_mb=max(1, paths.MAX_UPLOAD_BYTES // (1024 * 1024)),

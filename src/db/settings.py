@@ -13,6 +13,7 @@ DEFAULT_SETTINGS = {
     "models": "[]",
     "use_bert": "0",
     "client_wasm": "0",
+    "local_descriptor": "0",
     "bert_max_tokens": str(paths.BERT_MAX_TOKENS),
 }
 

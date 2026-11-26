@@ -21,6 +21,23 @@ def test_config_saves_client_wasm_option(tmp_path) -> None:
     client = _setup_client(tmp_path)
     page = client.get("/config").get_data(as_text=True)
     assert "Usar hardware (seu) para trabalhar com modelos" in page
+    assert "Descritor de Inferência Local" in page
+
+    token = support.csrf(client, "/config")
+    # Descritor de Inferência Local não pode ser ativado sem client_wasm
+    client.post(
+        "/config",
+        data={
+            "_csrf_token": token,
+            "action": "save",
+            "base_url": "http://localhost:11434/v1",
+            "correction_model": "",
+            "image_model": "",
+            "local_descriptor": "1",
+        },
+        follow_redirects=True,
+    )
+    assert db.get_settings()["local_descriptor"] == "0"
 
     token = support.csrf(client, "/config")
     resp = client.post(
@@ -32,6 +49,7 @@ def test_config_saves_client_wasm_option(tmp_path) -> None:
             "correction_model": "",
             "image_model": "",
             "client_wasm": "1",
+            "local_descriptor": "1",
             "use_bert": "1",
         },
         follow_redirects=True,
@@ -39,6 +57,7 @@ def test_config_saves_client_wasm_option(tmp_path) -> None:
     assert resp.status_code == 200
     settings = db.get_settings()
     assert settings["client_wasm"] == "1"
+    assert settings["local_descriptor"] == "1"
     assert settings["use_bert"] == "1"
 
 
@@ -102,3 +121,57 @@ def test_upload_with_client_wasm_scores_without_server_bert(tmp_path) -> None:
     assert row["score_mode"] == "bert_wasm"
     assert row["note"] == "720"
     assert json.loads(row["scores"]) == scores
+
+
+def test_upload_with_local_descriptor_saves_explanation(tmp_path) -> None:
+    client = _setup_client(tmp_path)
+    db.save_settings(
+        {
+            "base_url": "http://localhost:11434/v1",
+            "correction_model": "",
+            "image_model": "",
+            "models": "[]",
+            "use_bert": "1",
+            "client_wasm": "1",
+            "local_descriptor": "1",
+        }
+    )
+
+    upload_page = client.get("/upload")
+    assert upload_page.status_code == 200
+    html = upload_page.get_data(as_text=True)
+    assert 'data-local-descriptor="1"' in html
+
+    token = support.csrf(client, "/upload")
+    scores = {"C1": 120, "C2": 160, "C3": 120, "C4": 160, "C5": 120}
+    resp = client.post(
+        "/upload",
+        data={
+            "_csrf_token": token,
+            "source": "text",
+            "text": "Redação de teste com descritor local no navegador.",
+            "theme": "Tecnologia e sociedade",
+            "client_scores": json.dumps(scores),
+            "client_explanation": "Explicação gerada no hardware do usuário.",
+            "client_errors": "Amplie o detalhamento na conclusão.",
+            "client_descriptor_model": "wasm-local-descriptor",
+        },
+        follow_redirects=False,
+    )
+    assert resp.status_code == 302
+
+    for _ in range(50):
+        rows, _ = db.recent_corrections(1, 10)
+        if rows and rows[0]["status"] != "corrigindo" and not worker.is_active(rows[0]["id"]):
+            break
+        time.sleep(0.05)
+
+    rows, _ = db.recent_corrections(1, 10)
+    assert len(rows) == 1
+    row = dict(rows[0])
+    assert row["status"] == "corrigido"
+    assert row["score_mode"] == "bert_wasm+local_descriptor"
+    assert row["note"] == "680"
+    assert row["explanation"] == "Explicação gerada no hardware do usuário."
+    assert row["errors"] == "Amplie o detalhamento na conclusão."
+    assert row["model"] == "wasm-local-descriptor"

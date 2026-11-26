@@ -139,6 +139,21 @@ def fetch_models(base_url: str, api_key: str = "") -> list[str]:
     except httpx.HTTPError as exc:
         raise GradingError(f"Não foi possível conectar a {url}: {exc}") from exc
 
+    if response.status_code == 404 and is_local_endpoint(base_url):
+        root_url = base_url[:-3] if base_url.endswith("/v1") else base_url
+        ollama_tags_url = f"{root_url}/api/tags"
+        try:
+            tags_resp = httpx.get(
+                ollama_tags_url,
+                headers={"Accept": "application/json"},
+                timeout=15.0,
+                follow_redirects=True,
+            )
+            if tags_resp.status_code < 400:
+                return _extract_model_ids(tags_resp.json(), ollama_tags_url)
+        except (httpx.HTTPError, ValueError):
+            pass
+
     if response.status_code == 404:
         raise GradingError(
             f"Endpoint de modelos não encontrado: GET {url} retornou 404. "

@@ -41,8 +41,9 @@ def register(app: Flask) -> None:
         response.headers.setdefault(
             "Content-Security-Policy",
             "default-src 'self'; img-src 'self' data:; style-src 'self'; "
-            "script-src 'self' 'wasm-unsafe-eval'; base-uri 'none'; form-action 'self'; "
-            "frame-ancestors 'none'",
+            "script-src 'self' 'wasm-unsafe-eval'; "
+            "connect-src 'self' http://localhost:* http://127.0.0.1:*; "
+            "base-uri 'none'; form-action 'self'; frame-ancestors 'none'",
         )
         return response
 
