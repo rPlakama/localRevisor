@@ -7,8 +7,16 @@
 <p class="card card--error" role="alert">{{ error }}</p>
 {% endif %}
 
-<form class="upload-form" method="post" enctype="multipart/form-data">
+<form
+  class="upload-form"
+  method="post"
+  enctype="multipart/form-data"
+  {% if client_wasm %}data-client-wasm="1"{% endif %}
+>
   <input type="hidden" name="_csrf_token" value="{{ csrf_token() }}" />
+  {% if client_wasm %}
+  <input type="hidden" name="client_scores" id="client-scores" value="" />
+  {% endif %}
 
   <div class="segmented" role="group" aria-label="Origem do texto">
     <label class="segment">
@@ -75,9 +83,13 @@
     <button class="button" id="submit" type="submit">Enviar</button>
   </div>
 
-  <p class="field__hint">
+  <p class="field__hint" id="wasm-status">
+    {% if client_wasm %}
+    Modo WebAssembly ativo: as notas C1–C5 serão calculadas localmente no seu navegador antes do envio.
+    {% else %}
     A correção é uma estimativa para estudo. No modo Somente BERT tudo roda
     localmente; com IA, o texto é enviado apenas ao provedor que você configurar.
+    {% endif %}
   </p>
 </form>
 {% endblock %}

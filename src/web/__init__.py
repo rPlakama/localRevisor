@@ -1,6 +1,7 @@
 """App factory Flask do localRevisor."""
 from __future__ import annotations
 
+import os
 from collections.abc import Callable
 from pathlib import Path
 
@@ -10,6 +11,15 @@ from .. import paths, secrets_store
 from . import feedback, routes_config, routes_corrections, security
 
 SRC_DIR = Path(__file__).resolve().parent.parent
+DEFAULT_TRUSTED_HOSTS = ["localhost", "127.0.0.1", "::1", "[::1]"]
+
+
+def _trusted_hosts() -> list[str]:
+    raw = os.environ.get("LOCALREVISOR_TRUSTED_HOSTS", "").strip()
+    if not raw:
+        return list(DEFAULT_TRUSTED_HOSTS)
+    hosts = [item.strip() for item in raw.split(",") if item.strip()]
+    return hosts or list(DEFAULT_TRUSTED_HOSTS)
 
 
 def create_app(
@@ -25,7 +35,7 @@ def create_app(
         MAX_CONTENT_LENGTH=paths.MAX_UPLOAD_BYTES,
         SESSION_COOKIE_HTTPONLY=True,
         SESSION_COOKIE_SAMESITE="Lax",
-        TRUSTED_HOSTS=["localhost", "127.0.0.1", "::1", "[::1]"],
+        TRUSTED_HOSTS=_trusted_hosts(),
     )
     app.secret_key = secrets_store.load_or_create_secret()
 

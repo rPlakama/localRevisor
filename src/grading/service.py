@@ -33,7 +33,7 @@ def _parse_response(
     truncated: bool,
     text: str,
 ) -> tuple[int, dict[str, int], str, str]:
-    if mode == "bert+llm":
+    if mode in {"bert+llm", "bert_wasm+llm"}:
         return parse_hybrid(content, scores, truncated, text)
     note, parsed_scores, explanation, errors = parse_review(content)
     quote_warning = verify_quotes(explanation, text)
@@ -59,25 +59,40 @@ def review(
     client: OpenAI | None = None,
     session_id: str | None = None,
     bert_only: bool = False,
+    client_scores: dict[str, int] | None = None,
 ) -> ReviewResult:
     if not text.strip():
         raise GradingError("A redação está vazia.")
     started = time.monotonic()
 
     if bert_only:
-        motivo = bert_notas.motivo_indisponivel()
-        if motivo:
-            raise GradingError(
-                "O modo Somente BERT não pode ser usado: " + motivo
+        if client_scores is not None:
+            scores = dict(client_scores)
+            truncated = False
+            score_mode = "bert_wasm"
+            model_name = "wasm-client"
+            provider = "browser"
+            prompt_ver = "wasm-only"
+            note_source = "pelo modelo local no seu navegador (WebAssembly)"
+        else:
+            motivo = bert_notas.motivo_indisponivel()
+            if motivo:
+                raise GradingError(
+                    "O modo Somente BERT não pode ser usado: " + motivo
+                )
+            scores, truncated = bert_notas.estimar(
+                text, max_total_tokens=_bert_max_tokens(settings)
             )
-        scores, truncated = bert_notas.estimar(
-            text, max_total_tokens=_bert_max_tokens(settings)
-        )
+            score_mode = "bert"
+            model_name = "bertimbau-enem"
+            provider = "local"
+            prompt_ver = "bert-only"
+            note_source = "pelo modelo BERTimbau local"
         linhas = [
             f"{name}: {value}/200" for name, value in scores.items()
         ]
         linhas.append(
-            "\nAvaliação feita somente pelo modelo BERTimbau local "
+            f"\nAvaliação feita somente {note_source} "
             "(sem explicação por IA)."
         )
         if truncated:
@@ -90,10 +105,10 @@ def review(
             explanation="\n".join(linhas),
             errors="",
             source_text=text,
-            score_mode="bert",
-            model="bertimbau-enem",
-            provider="local",
-            prompt_version="bert-only",
+            score_mode=score_mode,
+            model=model_name,
+            provider=provider,
+            prompt_version=prompt_ver,
             duration_ms=int((time.monotonic() - started) * 1000),
             tokens_in=0,
             tokens_out=0,
@@ -106,14 +121,20 @@ def review(
     tokens_in = tokens_out = 0
 
     if settings.get("use_bert") == "1":
-        motivo = bert_notas.motivo_indisponivel()
-        if motivo:
-            raise GradingError(
-                "O modo BERT está ativado, mas não pode ser usado: " + motivo
+        if client_scores is not None:
+            scores = dict(client_scores)
+            truncated = False
+            mode = "bert_wasm+llm"
+        else:
+            motivo = bert_notas.motivo_indisponivel()
+            if motivo:
+                raise GradingError(
+                    "O modo BERT está ativado, mas não pode ser usado: " + motivo
+                )
+            scores, truncated = bert_notas.estimar(
+                text, max_total_tokens=_bert_max_tokens(settings)
             )
-        scores, truncated = bert_notas.estimar(
-            text, max_total_tokens=_bert_max_tokens(settings)
-        )
+            mode = "bert+llm"
         scores_text = "\n".join(f"{name}: {value}" for name, value in scores.items())
         messages = [
             {"role": "system", "content": HYBRID_PROMPT},
@@ -121,13 +142,13 @@ def review(
                 "role": "user",
                 "content": (
                     f"<tema>\n{theme}\n</tema>\n\n"
-                    f"Notas estimadas:\n{scores_text}\n\n"
+                    f"Notas iniciais de referência (BERT local, sem leitura do tema):\n"
+                    f"{scores_text}\n\n"
                     f"<redacao>\n{text}\n</redacao>"
                 ),
             },
         ]
         prompt_version = PROMPT_VERSION_HYBRID
-        mode = "bert+llm"
     else:
         messages = [
             {"role": "system", "content": REVIEW_PROMPT},
@@ -163,7 +184,8 @@ def review(
             '{"scores": {"C1": 0, "C2": 0, "C3": 0, "C4": 0, "C5": 0},'
             ' "note": 0, "explanation": "...", "errors": []}'
             if mode == "llm"
-            else '{"explanation": {"C1": "...", "C2": "...", "C3": "...",'
+            else '{"scores": {"C1": 0, "C2": 0, "C3": 0, "C4": 0, "C5": 0},'
+            ' "explanation": {"C1": "...", "C2": "...", "C3": "...",'
             ' "C4": "...", "C5": "..."}, "errors": []}'
         )
         repaired, tin, tout = repair_completion(

@@ -1,96 +1,75 @@
 # Pipeline de ML do localRevisor
 
-Esta pasta reúne tudo o que foi feito para **treinar e avaliar** os modelos que estimam as notas por competência (C1 a C5) das redações do Enem: carga e preparo dos dados, baselines, IAs generativas, BERTimbau, comparação e teste final. O aplicativo (pasta `src/`) fica separado e só usa o modelo treinado.
+Esta pasta reúne a **pipeline automatizada de Machine Learning** do **localRevisor** para estimar as notas por competência (`C1` a `C5`, de `0` a `200` em faixas de `40` pontos) de redações no padrão ENEM.
 
-## Scripts
+## Estrutura de diretórios
 
-| Etapa | Arquivo | O que faz |
-|---|---|---|
-| Dados | `preparar_dados.py` | Lê o corpus Essay-BR e gera `dados/train.csv`, `valid.csv` e `test.csv` |
-| Baselines | `baseline_atributos.py`, `atributos.py` | B0 (sempre a nota mais comum) e B1 (atributos manuais + regressão Ridge) |
-| IAs generativas | `llm_zero_shot.py` | Corrige redações com qualquer IA compatível com a API da OpenAI (nuvem ou Ollama) |
-| BERTimbau | `treinar_bert.py` | Treina o modelo final e o salva para o aplicativo |
-| BERTimbau | `experimentos_bert.py` | Experimentos de temas novos e de sementes |
-| Comparação | `comparar.py` | Compara os modelos na validação, com intervalos de confiança |
-| Teste final | `avaliar_teste.py` | Avalia o teste. **Use uma única vez** |
-| Apoio | `metricas.py`, `avaliacao.py`, `bert_treino.py`, `divisao.py` | Métricas, tabela de avaliação, treino e divisão por temas |
-
-Rode todos os comandos **de dentro da pasta `ml/`**.
-
-## Como reproduzir
-
-1. **Ambiente** (Python 3.13 ou superior):
-
-   ```
-   pip install -r requirements-ml.txt
-   ```
-
-   Para treinar o BERT, instale também `pip install -r ../requirements-bert.txt` e use uma GPU (no Google Colab, o treino leva cerca de 6 minutos). Sem GPU o treino é muito lento.
-
-2. **Corpus** (não vem junto com este projeto):
-
-   ```
-   git clone https://github.com/lplnufpi/essay-br corpus
-   python preparar_dados.py --corpus corpus --saida dados
-   ```
-
-   O Essay-BR usa a licença MIT. O corpus só traz o **código numérico do tema** (0 a 85), sem o texto da proposta. Os textos das redações não devem ser publicados com este projeto.
-
-3. **Baselines:**
-
-   ```
-   python baseline_atributos.py
-   ```
-
-4. **BERTimbau:**
-
-   ```
-   python treinar_bert.py --saida ../modelos/bertimbau_enem --teste dados/test.csv
-   python experimentos_bert.py temas-novos
-   python experimentos_bert.py sementes
-   ```
-
-   O `--teste` só grava as previsões do teste, sem avaliá-las.
-
-5. **IAs generativas** (exemplo com o Ollama, no PowerShell):
-
-   ```
-   $env:LLM_MODEL="qwen3:8b"
-   $env:ANCORAS="1"
-   $env:N_REDACOES="200"
-   python llm_zero_shot.py
-   ```
-
-   Para um serviço em nuvem, defina também `LLM_BASE_URL` e `LLM_API_KEY`. As IAs recebem só a redação (sem o tema). As respostas ficam em `resultados/*.jsonl` e **não devem ser publicadas**, porque trazem trechos das redações.
-
-6. **Comparação e teste final:**
-
-   ```
-   python comparar.py
-   python avaliar_teste.py
-   ```
-
-   O `avaliar_teste.py` usa o `resultados/bert_test_previsoes.csv`. Ele deve ser executado **uma única vez**, com o modelo já escolhido, para o resultado do teste não ser contaminado por decisões tomadas olhando para ele.
-
-## Resultados guardados em `resultados/`
-
-| Arquivo | Conteúdo |
-|---|---|
-| `bert_valid_previsoes.csv`, `bert_test_previsoes.csv` | Notas previstas pelo modelo final (só ids e notas) |
-| `comparacao_teste.csv` | Resultado final no teste: B0, B1 e BERTimbau, com intervalos de confiança |
-| `temas_novos_resultado.csv` | QWK em temas vistos e em temas novos (3 repetições) |
-| `sementes_resultado.csv` | QWK com 3 sementes de treino |
-
-Os demais arquivos (`comparacao_validacao_*.csv` e os `.jsonl` das IAs) são gerados pelos scripts e não são versionados.
-
-## O que não vai para o Git
-
-Acrescente ao `.gitignore` da raiz do projeto:
-
+```text
+ml/
+├── __init__.py
+├── pipeline.py                  # CLI unificado: collect, preprocess, train, evaluate, run, predict
+├── data/
+│   ├── collect.py               # Coleta/carga (Essay-BR local, extended_essay-br.csv ou download)
+│   ├── preprocess.py            # Limpeza, validação de notas e split train/valid/test
+│   └── features.py              # Extração dos 8 atributos linguísticos (B1)
+├── models/
+│   ├── baseline.py              # B0 (moda) e B1 (StandardScaler + Ridge) + exportação de pesos WASM
+│   └── bert.py                  # Fine-tuning e inferência com BERTimbau
+├── eval/
+│   ├── metrics.py               # QWK, qwk_por_competencia e teste de não regressão
+│   ├── evaluate.py              # Tabelas por competência e relatórios JSON/CSV
+│   └── compare.py               # Comparação B0, B1, BERTimbau e LLMs com IC 95% (bootstrap)
+├── experiments/
+│   ├── bert_experiments.py      # Experimentos de temas novos e sementes
+│   └── llm_zero_shot.py         # Avaliação zero-shot via API compatível com OpenAI
+└── resultados/                  # Relatórios e previsões gerados
 ```
-modelos/
-ml/corpus/
-ml/dados/
-ml/resultados/*.jsonl
-ml/resultados/comparacao_validacao_*.csv
+
+## Fluxo automatizado
+
+```mermaid
+flowchart LR
+    A["1. collect\n(data/bench/extended_essay-br.csv\nou download Essay-BR)"] --> B["2. preprocess\n(limpeza + validação C1..C5\n+ split train/valid/test)"]
+    B --> C["3. train\n(baseline Ridge -> model.joblib + weights.json\nou BERTimbau -> safetensors)"]
+    C --> D["4. evaluate\n(QWK, MAE, acerto ±40, viés\n-> ml/resultados/*.json,csv)"]
+    C --> E["5. predict\n(nova redação via --text, --file ou stdin\n-> C1..C5 e Total 0..1000)"]
 ```
+
+## Como executar (da raiz do repositório)
+
+Com Nix (`nix develop` ou `nix run .#ml-pipeline`):
+
+1. **Executar toda a pipeline automaticamente (Coleta → Pré-processamento → Treino → Avaliação):**
+
+   ```bash
+   python -m ml.pipeline run --model baseline
+   # ou via Nix:
+   nix run .#ml-pipeline -- run --model baseline
+   ```
+
+2. **Executar etapas individuais:**
+
+   ```bash
+   python -m ml.pipeline collect
+   python -m ml.pipeline preprocess --seed 42
+   python -m ml.pipeline train --model baseline
+   python -m ml.pipeline evaluate --model baseline --split valid
+   ```
+
+   Para treinar o **BERTimbau** (recomendado com GPU):
+
+   ```bash
+   python -m ml.pipeline train --model bert --epochs 4 --seed 42
+   python -m ml.pipeline evaluate --model bert --split valid
+   ```
+
+3. **Gerar predições para novas redações:**
+
+   ```bash
+   python -m ml.pipeline predict --model baseline --file "redacoes/A importância da prática de esportes_880.md" --json
+   python -m ml.pipeline predict --model bert --text "Texto da redação..."
+   ```
+
+## Integração com WebAssembly no navegador
+
+O comando `train --model baseline` exporta `modelos/baseline_ridge/weights.json`, consumido pelo Web Worker WebAssembly (`src/static/wasm_worker.js` + `src/static/model_score.wasm`) quando a opção **"Usar hardware (seu) para trabalhar com modelos"** está ativada em `/config`.

@@ -163,6 +163,14 @@ flowchart LR
 ## 7. Garantias de segurança e resiliência
 
 - **Local-first:** dados ficam em `data/app.db` (modo WAL) e `data/uploads/` (diretório `700`); chave de API nunca vai para o SQLite.
-- **Proteções web:** CSRF obrigatório em todos os POSTs, `TRUSTED_HOSTS` restrito a loopback, CSP estrita (`script-src 'self'; style-src 'self'`) e validação de arquivos por magic bytes.
-- **Fail-closed no BERT:** se o modo BERT estiver ligado sem checkpoint válido, a correção falha com mensagem clara em vez de inventar notas.
+- **Proteções web:** CSRF obrigatório em todos os POSTs, `TRUSTED_HOSTS` restrito a loopback, CSP estrita (`script-src 'self' 'wasm-unsafe-eval'; style-src 'self'`) e validação de arquivos por magic bytes.
+- **Fail-closed no BERT:** se o modo BERT estiver ligado sem checkpoint válido (e sem modo WebAssembly no cliente), a correção falha com mensagem clara em vez de inventar notas.
 - **Recuperação automática:** jobs que estavam em `corrigindo` durante um reinício viram `interrompido` na inicialização e podem ser reexecutados com um clique.
+
+---
+
+## 8. Modo WebAssembly no cliente e Serviço NixOS
+
+- **Inferência no hardware do usuário (`/config` → "Usar hardware (seu) para trabalhar com modelos"):** quando ativada, `src/static/upload.js` dispara `src/static/wasm_worker.js`, que carrega `src/static/model_score.wasm` e os pesos de `/wasm-model/weights.json` (`modelos/baseline_ridge/weights.json` ou pesos padrão), calcula `C1–C5` no navegador em WebAssembly e envia `client_scores` ao servidor — permitindo rodar o servidor hospedeiro sem PyTorch/BERT.
+- **Pipeline de ML (`ml/pipeline.py`):** etapas automatizadas `collect` → `preprocess` → `train` → `evaluate` → `predict` (disponível também via `nix run .#ml-pipeline`).
+- **Módulo NixOS (`nix/module.nix` / `nixosModules.default`):** expõe `services.localrevisor` com serviço `systemd` endurecido (`DynamicUser`, `StateDirectory`, `waitress`).

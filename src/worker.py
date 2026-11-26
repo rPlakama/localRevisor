@@ -40,6 +40,7 @@ def start(
     stored_name: str,
     *,
     bert_only: bool = False,
+    client_scores: dict[str, int] | None = None,
 ) -> bool:
     """Agenda uma correção. Devolve False se ela já está na fila/execução."""
     with _active_lock:
@@ -48,7 +49,7 @@ def start(
         _active.add(correction_id)
     thread = threading.Thread(
         target=_run,
-        args=(correction_id, theme, stored_name, bert_only),
+        args=(correction_id, theme, stored_name, bert_only, client_scores),
         name=f"correcao-{correction_id}",
         daemon=True,
     )
@@ -62,11 +63,21 @@ def start(
 
 
 def _run(
-    correction_id: int, theme: str, stored_name: str, bert_only: bool = False
+    correction_id: int,
+    theme: str,
+    stored_name: str,
+    bert_only: bool = False,
+    client_scores: dict[str, int] | None = None,
 ) -> None:
     try:
         with _semaphore:
-            run_correction(correction_id, theme, stored_name, bert_only=bert_only)
+            run_correction(
+                correction_id,
+                theme,
+                stored_name,
+                bert_only=bert_only,
+                client_scores=client_scores,
+            )
     finally:
         with _active_lock:
             _active.discard(correction_id)
@@ -87,6 +98,7 @@ def run_correction(
     stored_name: str,
     *,
     bert_only: bool = False,
+    client_scores: dict[str, int] | None = None,
 ) -> None:
     """Executa uma correção de ponta a ponta. Também é usada nos testes."""
     row = db.get_correction(correction_id)
@@ -104,12 +116,12 @@ def run_correction(
         text = grading.obtain_text(
             path, kind, settings, session_id=session_id
         )
+        review_kwargs: dict[str, object] = {"session_id": session_id}
         if bert_only:
-            result = grading.review(
-                theme, text, settings, session_id=session_id, bert_only=True
-            )
-        else:
-            result = grading.review(theme, text, settings, session_id=session_id)
+            review_kwargs["bert_only"] = True
+        if client_scores is not None:
+            review_kwargs["client_scores"] = client_scores
+        result = grading.review(theme, text, settings, **review_kwargs)
         db.finish_correction(
             correction_id,
             note=result.note,

@@ -185,10 +185,26 @@
     <label class="check">
       <input
         type="checkbox"
+        name="client_wasm"
+        value="1"
+        {% if client_wasm %}checked{% endif %}
+      />
+      <span>Usar hardware (seu) para trabalhar com modelos</span>
+    </label>
+    <span class="field__hint">
+      Executa o modelo de notas diretamente no seu navegador via WebAssembly,
+      evitando exigir CPU/RAM do servidor hospedeiro para rodar o modelo local.
+    </span>
+  </div>
+
+  <div class="field">
+    <label class="check">
+      <input
+        type="checkbox"
         name="use_bert"
         value="1"
         {% if use_bert %}checked{% endif %}
-        {% if not bert_available %}disabled{% endif %}
+        {% if not bert_available and not client_wasm %}disabled{% endif %}
       />
       <span>Usar o BERTimbau para estimar as notas</span>
     </label>
@@ -208,8 +224,9 @@
     {% endif %}
     <span class="field__hint">
       {% if bert_available %}
-      Ligado: o BERTimbau estima C1–C5 e a IA explica cada nota. Desligado: a IA
-      faz a correção completa.
+      Ligado: o BERTimbau fornece notas iniciais de referência para C1–C5 e a IA
+      audita (ajustando desvios de tema ou extremos) e explica cada nota.
+      Desligado: a IA faz a correção completa.
       {% else %}
       Indisponível: {{ bert_reason }}
       {% endif %}

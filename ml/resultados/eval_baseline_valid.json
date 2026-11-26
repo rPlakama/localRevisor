@@ -1,0 +1,47 @@
+{
+  "model": "baseline",
+  "split": "valid",
+  "n_samples": 1048,
+  "mean_qwk": 0.2482,
+  "mean_mae": 29.44,
+  "mean_approx_acc": 0.869,
+  "mean_bias": -6.11,
+  "total_mae": 129.81,
+  "per_competency": [
+    {
+      "competencia": "C1",
+      "QWK": 0.142,
+      "erro_medio": 23.511,
+      "acerto_aprox": 0.939,
+      "vies_medio": -4.58
+    },
+    {
+      "competencia": "C2",
+      "QWK": 0.286,
+      "erro_medio": 26.756,
+      "acerto_aprox": 0.901,
+      "vies_medio": -1.489
+    },
+    {
+      "competencia": "C3",
+      "QWK": 0.284,
+      "erro_medio": 25.115,
+      "acerto_aprox": 0.895,
+      "vies_medio": -7.328
+    },
+    {
+      "competencia": "C4",
+      "QWK": 0.277,
+      "erro_medio": 32.748,
+      "acerto_aprox": 0.86,
+      "vies_medio": -4.656
+    },
+    {
+      "competencia": "C5",
+      "QWK": 0.252,
+      "erro_medio": 39.084,
+      "acerto_aprox": 0.75,
+      "vies_medio": -12.519
+    }
+  ]
+}

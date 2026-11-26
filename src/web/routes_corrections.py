@@ -1,6 +1,7 @@
 """Rotas principais de histórico, envio, revisão, retry e exclusão."""
 from __future__ import annotations
 
+import json
 import logging
 import math
 
@@ -10,6 +11,53 @@ from .. import bert_notas, db, files, paths, worker
 from .routes_config import settings_configured
 
 LOGGER = logging.getLogger(__name__)
+
+_DEFAULT_WASM_WEIGHTS = {
+    "version": 1,
+    "model_type": "baseline_ridge",
+    "comps": ["C1", "C2", "C3", "C4", "C5"],
+    "feature_names": [
+        "n_palavras",
+        "n_paragrafos",
+        "n_frases",
+        "palavras_por_frase",
+        "diversidade",
+        "conectivos",
+        "virgulas",
+        "proposta_final",
+    ],
+    "scaler_mean": [240.0, 4.0, 12.0, 20.0, 0.55, 2.0, 6.0, 1.5],
+    "scaler_scale": [85.0, 1.2, 5.0, 6.0, 0.08, 1.2, 2.5, 1.2],
+    "coef": [
+        [14.0, 4.0, 5.0, -1.0, 6.0, 5.0, 4.0, 2.0],
+        [16.0, 5.0, 6.0, -1.0, 7.0, 6.0, 3.0, 3.0],
+        [16.0, 5.0, 6.0, -1.0, 6.0, 6.0, 3.0, 3.0],
+        [14.0, 4.0, 5.0, -1.0, 5.0, 10.0, 5.0, 2.0],
+        [15.0, 4.0, 5.0, -1.0, 4.0, 5.0, 2.0, 14.0],
+    ],
+    "intercept": [120.0, 120.0, 120.0, 120.0, 120.0],
+}
+
+
+def _parse_client_scores(raw: str | None) -> dict[str, int] | None:
+    if not raw or not raw.strip():
+        return None
+    try:
+        data = json.loads(raw)
+    except ValueError:
+        return None
+    if not isinstance(data, dict):
+        return None
+    scores: dict[str, int] = {}
+    for comp in bert_notas.COMPETENCIAS:
+        val = data.get(comp)
+        if isinstance(val, bool) or not isinstance(val, (int, float)):
+            return None
+        ival = int(round(float(val) / 40.0) * 40)
+        if not (0 <= ival <= 200):
+            return None
+        scores[comp] = ival
+    return scores
 
 STATUS_LABELS = {
     "pendente": "Pendente",
@@ -26,14 +74,15 @@ def _enqueue(
     stored_name: str,
     *,
     bert_only: bool = False,
+    client_scores: dict[str, int] | None = None,
 ) -> bool:
     try:
+        kwargs: dict[str, object] = {}
         if bert_only:
-            started = worker.start(
-                correction_id, theme, stored_name, bert_only=True
-            )
-        else:
-            started = worker.start(correction_id, theme, stored_name)
+            kwargs["bert_only"] = True
+        if client_scores is not None:
+            kwargs["client_scores"] = client_scores
+        started = worker.start(correction_id, theme, stored_name, **kwargs)
     except Exception as exc:
         LOGGER.exception("Falha ao iniciar a correção %s", correction_id)
         db.fail_correction(correction_id, f"Falha ao iniciar a correção: {exc}")
@@ -143,21 +192,38 @@ def register(app: Flask) -> None:
         flash("Correção excluída.", "success")
         return redirect(url_for("index"))
 
+    @app.get("/wasm-model/weights.json")
+    def wasm_weights():
+        weights_path = paths.BASE_DIR / "modelos" / "baseline_ridge" / "weights.json"
+        if weights_path.is_file():
+            try:
+                return jsonify(json.loads(weights_path.read_text(encoding="utf-8")))
+            except (OSError, ValueError):
+                pass
+        return jsonify(_DEFAULT_WASM_WEIGHTS)
+
     @app.route("/upload", methods=["GET", "POST"])
     def upload():
         settings = db.get_settings()
         ai_configured = settings_configured(settings)
         bert_available = bert_notas.instalado()
-        if not ai_configured and not bert_available:
-            flash("Configure a IA ou baixe o BERT antes de enviar uma redação.", "warning")
+        client_wasm = settings.get("client_wasm") == "1"
+        if not ai_configured and not bert_available and not client_wasm:
+            flash("Configure a IA, baixe o BERT ou ative o modo WebAssembly.", "warning")
             return redirect(url_for("config", setup=1))
 
         error = None
         theme = request.form.get("theme", "").strip()
         source = request.form.get("source", "file")
+        model_ready = bert_available or client_wasm
         bert_only = (
-            bert_available
+            model_ready
             and (not ai_configured or request.form.get("bert_only") == "1")
+        )
+        client_scores = (
+            _parse_client_scores(request.form.get("client_scores"))
+            if client_wasm
+            else None
         )
         if request.method == "POST":
             if not theme:
@@ -172,7 +238,11 @@ def register(app: Flask) -> None:
                         "Texto colado.txt", stored_name, theme
                     )
                     if _enqueue(
-                        correction_id, theme, stored_name, bert_only=bert_only
+                        correction_id,
+                        theme,
+                        stored_name,
+                        bert_only=bert_only,
+                        client_scores=client_scores,
                     ):
                         flash("Redação enviada. Correção em andamento.", "success")
                         return redirect(url_for("index"))
@@ -193,7 +263,11 @@ def register(app: Flask) -> None:
                             file.filename, stored_name, theme
                         )
                         if _enqueue(
-                            correction_id, theme, stored_name, bert_only=bert_only
+                            correction_id,
+                            theme,
+                            stored_name,
+                            bert_only=bert_only,
+                            client_scores=client_scores,
                         ):
                             flash("Redação enviada. Correção em andamento.", "success")
                             return redirect(url_for("index"))
@@ -207,7 +281,8 @@ def register(app: Flask) -> None:
             theme=theme,
             source=source,
             ai_configured=ai_configured,
-            bert_available=bert_available,
+            bert_available=model_ready,
+            client_wasm=client_wasm,
             bert_only=bert_only,
             back_url=url_for("index"),
             max_upload_mb=max(1, paths.MAX_UPLOAD_BYTES // (1024 * 1024)),

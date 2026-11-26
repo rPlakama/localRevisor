@@ -15,8 +15,8 @@ import pandas as pd
 from openai import OpenAI
 from tqdm import tqdm
 
-from avaliacao import avaliar
-from metricas import COMPS
+from ..eval.evaluate import avaliar
+from ..eval.metrics import COMPS
 
 logging.getLogger("httpx2").setLevel(logging.WARNING)
 

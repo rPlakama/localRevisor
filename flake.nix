@@ -1,5 +1,5 @@
 {
-  description = "Nix-develop-flake for LocalRevisor";
+  description = "Nix-develop-flake and NixOS service module for LocalRevisor";
 
   inputs = {
     nixpkgs.url = "github:NixOS/nixpkgs/nixos-unstable";
@@ -10,40 +10,31 @@
     let
       system = "x86_64-linux";
       pkgs = import nixpkgs { inherit system; };
-      python = pkgs.python314.withPackages (ps: with ps; [
-        # app
-        flask
-        openai
-        pypdf
-        python-dotenv
-        # modo BERT (opcional)
-        numpy
-        torch
-        transformers
-        safetensors
-        tokenizers
-        huggingface-hub
-      ]);
-      localrevisor = pkgs.writeShellApplication {
-        name = "localrevisor";
-        runtimeInputs = [
-          python
-          pkgs.ffmpeg
-        ];
-        text = ''
-          if [ ! -f src/main.py ]; then
-            echo "Erro: execute a partir da raiz do repositório localRevisor (onde fica src/main.py)." >&2
-            exit 1
-          fi
-          for arg in "$@"; do
-            case "$arg" in
-              benchredação|benchredacao)
-                exec python -m src.bench "$@"
-                ;;
-            esac
-          done
-          exec python -m flask --app src.main run --debug "$@"
-        '';
+      python = pkgs.python314.withPackages (
+        ps: with ps; [
+          # app
+          flask
+          httpx
+          openai
+          pypdf
+          python-dotenv
+          waitress
+          # ML pipeline & BERT (opcional)
+          joblib
+          numpy
+          pandas
+          scikit-learn
+          tqdm
+          torch
+          transformers
+          safetensors
+          tokenizers
+          huggingface-hub
+        ]
+      );
+      built = import ./nix/package.nix {
+        inherit pkgs python;
+        srcRoot = self;
       };
       docsServe = pkgs.writeShellApplication {
         name = "docs-serve";
@@ -86,14 +77,19 @@
     in
     {
       packages.${system} = {
-        default = localrevisor;
+        default = built.localrevisor;
+        ml-pipeline = built.mlPipeline;
         DOCS = docsServe;
       };
 
       apps.${system} = {
         default = {
           type = "app";
-          program = "${localrevisor}/bin/localrevisor";
+          program = "${built.localrevisor}/bin/localrevisor";
+        };
+        ml-pipeline = {
+          type = "app";
+          program = "${built.mlPipeline}/bin/ml-pipeline";
         };
         DOCS = {
           type = "app";
@@ -101,12 +97,20 @@
         };
       };
 
+      nixosModules = {
+        default = import ./nix/module.nix;
+        localrevisor = import ./nix/module.nix;
+      };
+
       devShells.${system} = {
         default = pkgs.mkShell {
           packages = [
             python
-            localrevisor
-          ] ++ (with pkgs; [
+            built.localrevisor
+            built.mlPipeline
+          ]
+          ++ (with pkgs; [
+            python314Packages.pytest
             ruff
             ffmpeg
             uv
