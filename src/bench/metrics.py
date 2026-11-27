@@ -96,6 +96,8 @@ def format_summary(
     *,
     model_info: str,
     bert_limit: int,
+    split_info: str = "",
+    leak_warning: bool = False,
 ) -> str:
     ok = [rec for rec in records if not rec.error]
     failed = [rec for rec in records if rec.error]
@@ -103,8 +105,18 @@ def format_summary(
         "",
         f"=== Resumo benchredação ({mode}) ===",
         f"Configuração: {model_info} | BERT max_tokens={bert_limit}",
-        f"Amostras: {len(ok)}/{len(records)} concluídas ({len(failed)} erro(s))",
     ]
+    if split_info:
+        lines.append(f"Recorte: {split_info}")
+    if leak_warning:
+        lines.append(
+            "Aviso: este recorte inclui temas <= 85 do Essay-BR v1, que contêm "
+            "redações do treino do BERT (métricas podem ficar infladas). "
+            "Use --split unseen para avaliar apenas temas inéditos."
+        )
+    lines.append(
+        f"Amostras: {len(ok)}/{len(records)} concluídas ({len(failed)} erro(s))"
+    )
     if not ok:
         return "\n".join(lines)
 

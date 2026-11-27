@@ -5,6 +5,7 @@ import argparse
 import sys
 from pathlib import Path
 
+from .dataset import VALID_SPLITS
 from .runner import run_benchmark
 
 _MODE_ALIASES = {
@@ -62,6 +63,15 @@ def parse_args(argv: list[str]) -> argparse.Namespace:
         help="CSV local opcional (Essay-BR ou formato id,tema,texto,C1..C5)",
     )
     parser.add_argument(
+        "--split",
+        choices=VALID_SPLITS,
+        default="auto",
+        help=(
+            "recorte de temas no Essay-BR: 'auto' (padrão: só temas >85 fora do treino "
+            "no extended-corpus), 'unseen' (>85), 'all' (todos) ou 'seen' (<=85)"
+        ),
+    )
+    parser.add_argument(
         "--no-download",
         action="store_true",
         help="não baixar o Essay-BR automaticamente se o cache local não existir",
@@ -86,6 +96,7 @@ def main(argv: list[str] | None = None) -> int:
             csv_path=args.csv,
             debug=args.debug,
             allow_download=not args.no_download,
+            split=args.split,
         )
     except Exception as exc:
         print(f"Erro no benchredação: {exc}", file=sys.stderr)

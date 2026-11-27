@@ -10,6 +10,7 @@ from .. import bert_notas, db, grading, paths
 from .dataset import (
     EssaySample,
     ensure_essay_br,
+    filter_by_split,
     load_samples,
     sample_stratified,
 )
@@ -27,8 +28,14 @@ def _bert_limit_from(settings: dict[str, str]) -> int:
 
 
 def _resolve_samples(
-    *, csv_path: Path | None, limit: int, seed: int, allow_download: bool
-) -> list[EssaySample]:
+    *,
+    csv_path: Path | None,
+    limit: int,
+    seed: int,
+    allow_download: bool,
+    split: str = "auto",
+) -> tuple[list[EssaySample], str, bool]:
+    using_extended = False
     if csv_path is not None:
         prompts_guess = csv_path.parent / "prompts.csv"
         all_samples = load_samples(
@@ -41,9 +48,18 @@ def _resolve_samples(
         else:
             essays_csv, prompts_csv = ensure_essay_br(allow_download=allow_download)
             all_samples = load_samples(essays_csv, prompts_csv)
+            using_extended = True
     if not all_samples:
         raise RuntimeError("Nenhuma redação válida encontrada para o benchmark.")
-    return sample_stratified(all_samples, limit, seed=seed)
+    filtered, split_info, leak_risk = filter_by_split(
+        all_samples, split, default_unseen=using_extended
+    )
+    if not filtered:
+        raise RuntimeError(
+            f"Nenhuma redação encontrada no recorte {split!r}. "
+            "Tente --split all ou informe outro --csv."
+        )
+    return sample_stratified(filtered, limit, seed=seed), split_info, leak_risk
 
 
 def _evaluate_sample(
@@ -140,6 +156,7 @@ def run_benchmark(
     csv_path: Path | None = None,
     debug: bool = False,
     allow_download: bool = True,
+    split: str = "auto",
 ) -> list[BenchRecord]:
     if mode not in VALID_MODES:
         raise ValueError(f"Modo inválido: {mode!r}. Use: {', '.join(VALID_MODES)}.")
@@ -162,12 +179,14 @@ def run_benchmark(
             )
 
     effective_limit = limit if limit is not None else (15 if mode == "bert" else 5)
-    samples = _resolve_samples(
+    samples, split_info, leak_risk = _resolve_samples(
         csv_path=csv_path,
         limit=effective_limit,
         seed=seed,
         allow_download=allow_download,
+        split=split,
     )
+    leak_warning = leak_risk and mode in ("bert", "bert_ai")
 
     if mode == "bert":
         model_info = f"BERT local ({bert_notas._pasta()})"
@@ -178,7 +197,10 @@ def run_benchmark(
             f"({grading.PROMPT_VERSION_HYBRID if mode == 'bert_ai' else grading.PROMPT_VERSION_REVIEW})"
         )
 
-    print(f"Iniciando benchredação [{mode}] — {len(samples)} redação(ões) ({model_info})")
+    print(
+        f"Iniciando benchredação [{mode}] — {len(samples)} redação(ões) "
+        f"({model_info} | {split_info})"
+    )
     records: list[BenchRecord] = []
     for idx, sample in enumerate(samples, start=1):
         rec = _evaluate_sample(
@@ -189,7 +211,12 @@ def run_benchmark(
 
     print(
         format_summary(
-            mode, records, model_info=model_info, bert_limit=bert_limit
+            mode,
+            records,
+            model_info=model_info,
+            bert_limit=bert_limit,
+            split_info=split_info,
+            leak_warning=leak_warning,
         )
     )
     return records

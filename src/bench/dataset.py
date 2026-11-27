@@ -17,6 +17,10 @@ ESSAY_BR_BASE_URL = (
 )
 ESSAYS_FILENAME = "extended_essay-br.csv"
 PROMPTS_FILENAME = "prompts.csv"
+# Prompts 0..85 compõem o Essay-BR original (usado no treino/validação/teste do BERT);
+# prompts > 85 foram adicionados no extended-corpus e nunca entraram no treino.
+ESSAY_BR_V1_MAX_PROMPT_ID = 85
+VALID_SPLITS = ("auto", "unseen", "all", "seen")
 
 
 @dataclass(frozen=True)
@@ -26,6 +30,7 @@ class EssaySample:
     text: str
     scores: dict[str, int]
     total: int
+    prompt_id: int | None = None
 
 
 def bench_dir() -> Path:
@@ -118,6 +123,7 @@ def load_samples(
             if scores is None:
                 continue
             prompt_key = str(row.get("prompt") or row.get("tema") or "").strip()
+            prompt_id = int(prompt_key) if prompt_key.isdigit() else None
             theme = (
                 prompts.get(prompt_key)
                 or (prompt_key if prompt_key and not prompt_key.isdigit() else "")
@@ -132,9 +138,68 @@ def load_samples(
                     text=text,
                     scores=scores,
                     total=sum(scores.values()),
+                    prompt_id=prompt_id,
                 )
             )
     return samples
+
+
+def filter_by_split(
+    samples: list[EssaySample],
+    split: str = "auto",
+    *,
+    default_unseen: bool = False,
+) -> tuple[list[EssaySample], str, bool]:
+    """Filtra amostras por recorte de temas para evitar vazamento do treino do BERT.
+
+    Devolve ``(amostras, descricao_split, risco_vazamento_treino)``.
+    """
+    if split not in VALID_SPLITS:
+        raise ValueError(
+            f"Split inválido: {split!r}. Use: {', '.join(VALID_SPLITS)}."
+        )
+    has_unseen = any(
+        s.prompt_id is not None and s.prompt_id > ESSAY_BR_V1_MAX_PROMPT_ID
+        for s in samples
+    )
+    has_seen = any(
+        s.prompt_id is not None and s.prompt_id <= ESSAY_BR_V1_MAX_PROMPT_ID
+        for s in samples
+    )
+
+    effective = split
+    if split == "auto":
+        effective = "unseen" if (default_unseen and has_unseen) else "all"
+
+    if effective == "unseen":
+        filtered = [
+            s
+            for s in samples
+            if s.prompt_id is not None and s.prompt_id > ESSAY_BR_V1_MAX_PROMPT_ID
+        ]
+        return (
+            filtered,
+            f"unseen (temas > {ESSAY_BR_V1_MAX_PROMPT_ID}, fora do treino do BERT)",
+            False,
+        )
+    if effective == "seen":
+        filtered = [
+            s
+            for s in samples
+            if s.prompt_id is not None and s.prompt_id <= ESSAY_BR_V1_MAX_PROMPT_ID
+        ]
+        return (
+            filtered,
+            f"seen (temas <= {ESSAY_BR_V1_MAX_PROMPT_ID}, inclui treino do BERT)",
+            bool(filtered),
+        )
+    return (
+        list(samples),
+        "all (todos os temas)"
+        if default_unseen
+        else "arquivo local (sem filtro de tema)",
+        bool(default_unseen and has_seen),
+    )
 
 
 def sample_stratified(

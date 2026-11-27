@@ -32,6 +32,10 @@ class BenchTests(unittest.TestCase):
 
         args_override = parse_args(["--debug", "benchredação", "bert_ai", "--bert-only"])
         self.assertEqual(args_override.mode, "bert")
+        self.assertEqual(args_override.split, "auto")
+
+        args_split = parse_args(["--debug", "benchredação", "bert", "--split", "all"])
+        self.assertEqual(args_split.split, "all")
 
     def test_load_essay_br_and_stratified_sampling(self):
         with tempfile.TemporaryDirectory() as tmp:
@@ -79,6 +83,53 @@ class BenchTests(unittest.TestCase):
         self.assertEqual(summary["C1"]["bias"], 40.0)
         text = bench.format_summary("bert", records, model_info="BERT", bert_limit=2048)
         self.assertIn("=== Resumo benchredação (bert) ===", text)
+
+        text_leak = bench.format_summary(
+            "bert",
+            records,
+            model_info="BERT",
+            bert_limit=2048,
+            split_info="all (todos os temas)",
+            leak_warning=True,
+        )
+        self.assertIn("Recorte: all (todos os temas)", text_leak)
+        self.assertIn("treino do BERT", text_leak)
+
+    def test_filter_by_split_separates_unseen_prompts(self):
+        seen = bench.EssaySample(
+            sample_id="1",
+            theme="Tema v1",
+            text="Texto v1.",
+            scores={"C1": 120, "C2": 120, "C3": 120, "C4": 120, "C5": 120},
+            total=600,
+            prompt_id=12,
+        )
+        unseen = bench.EssaySample(
+            sample_id="2",
+            theme="Tema estendido",
+            text="Texto novo.",
+            scores={"C1": 160, "C2": 160, "C3": 160, "C4": 160, "C5": 160},
+            total=800,
+            prompt_id=120,
+        )
+        auto_ext, label_auto, leak_auto = bench.filter_by_split(
+            [seen, unseen], "auto", default_unseen=True
+        )
+        self.assertEqual([s.sample_id for s in auto_ext], ["2"])
+        self.assertIn("unseen", label_auto)
+        self.assertFalse(leak_auto)
+
+        all_ext, _, leak_all = bench.filter_by_split(
+            [seen, unseen], "all", default_unseen=True
+        )
+        self.assertEqual(len(all_ext), 2)
+        self.assertTrue(leak_all)
+
+        auto_local, _, leak_local = bench.filter_by_split(
+            [seen, unseen], "auto", default_unseen=False
+        )
+        self.assertEqual(len(auto_local), 2)
+        self.assertFalse(leak_local)
 
     def test_run_benchmark_bert_and_bert_ai_with_csv(self):
         support.configure_models("modelo-teste")
