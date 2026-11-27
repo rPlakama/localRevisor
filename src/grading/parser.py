@@ -137,6 +137,10 @@ def parse_hybrid(
     content: str, bert_scores: dict[str, int], truncated: bool, source_text: str = ""
 ) -> tuple[int, dict[str, int], str, str]:
     data = extract_json_object(content)
+    parsed_scores = parse_scores(data, required=False)
+    final_scores = {
+        name: parsed_scores.get(name, bert_scores[name]) for name in COMPETENCIAS
+    }
     explanations = data.get("explanation", {})
     if not isinstance(explanations, dict):
         raise ModelOutputError("A resposta não trouxe a explicação por competência.")
@@ -146,7 +150,14 @@ def parse_hybrid(
         texto = str(explanations.get(name, "")).strip()
         if not texto:
             ausentes.append(name)
-        linhas.append(f"{name} ({bert_scores[name]}/200): {texto or 'Sem explicação.'}")
+        nota_final = final_scores[name]
+        nota_bert = bert_scores[name]
+        cabecalho = (
+            f"{name} ({nota_final}/200, ref. BERT: {nota_bert})"
+            if nota_final != nota_bert
+            else f"{name} ({nota_final}/200)"
+        )
+        linhas.append(f"{cabecalho}: {texto or 'Sem explicação.'}")
     errors = normalize_errors(data.get("errors"))
     if ausentes:
         errors = join_errors(
@@ -159,4 +170,4 @@ def parse_hybrid(
         )
     quote_warning = verify_quotes("\n".join(linhas), source_text)
     errors = join_errors(errors, quote_warning)
-    return sum(bert_scores.values()), dict(bert_scores), "\n\n".join(linhas), errors
+    return sum(final_scores.values()), final_scores, "\n\n".join(linhas), errors

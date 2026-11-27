@@ -111,6 +111,23 @@ class ParsingTests(unittest.TestCase):
         self.assertIn("leu apenas o início", explanation)
         self.assertIn("Aviso", explanation)
 
+    def test_hybrid_allows_llm_to_calibrate_bert_scores(self):
+        content = (
+            '{"scores": {"C1": 120, "C2": 40, "C3": 80, "C4": 120, "C5": 80},'
+            ' "explanation": {"C1": "ok", "C2": "tangenciou o tema", "C3": "raso",'
+            ' "C4": "ok", "C5": "faltam elementos"}, "errors": ["tangenciamento"]}'
+        )
+        bert_scores = {"C1": 120, "C2": 160, "C3": 120, "C4": 120, "C5": 120}
+        note, result_scores, explanation, _ = grading.parse_hybrid(
+            content, bert_scores, False, "texto"
+        )
+        self.assertEqual(
+            result_scores, {"C1": 120, "C2": 40, "C3": 80, "C4": 120, "C5": 80}
+        )
+        self.assertEqual(note, 440)
+        self.assertIn("C2 (40/200, ref. BERT: 160)", explanation)
+        self.assertIn("C1 (120/200):", explanation)
+
     def test_quote_warning(self):
         errors = grading.verify_quotes(
             'O texto diz "uma frase que não existe no original".',
@@ -215,6 +232,28 @@ class ReviewTests(unittest.TestCase):
         self.assertEqual(result.scores, fake_scores)
         self.assertEqual(result.tokens_in, 0)
         self.assertEqual(result.tokens_out, 0)
+
+    def test_review_hybrid_passes_reference_scores_and_applies_calibration(self):
+        settings = dict(SETTINGS, use_bert="1")
+        bert_scores = {"C1": 160, "C2": 160, "C3": 160, "C4": 160, "C5": 120}
+        client = FakeClient(
+            '{"scores": {"C1": 120, "C2": 40, "C3": 80, "C4": 120, "C5": 80},'
+            ' "explanation": {"C1": "desvios", "C2": "tangenciou", "C3": "lacunas",'
+            ' "C4": "ok", "C5": "incompleta"}, "errors": []}'
+        )
+        with mock.patch.object(
+            grading.bert_notas, "motivo_indisponivel", return_value=None
+        ):
+            with mock.patch.object(
+                grading.bert_notas, "estimar", return_value=(bert_scores, False)
+            ):
+                result = grading.review("Tema", "Redação.", settings, client=client)
+        self.assertEqual(result.score_mode, "bert+llm")
+        self.assertEqual(result.note, 440)
+        self.assertEqual(result.scores["C2"], 40)
+        self.assertIn("ref. BERT: 160", result.explanation)
+        user_msg = client.completions.calls[0]["messages"][1]["content"]
+        self.assertIn("sem leitura do tema", user_msg)
 
 
 class FetchModelsTests(unittest.TestCase):
