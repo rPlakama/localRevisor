@@ -1,0 +1,9 @@
+Sabemos que o aquecimento global com essa mudança climatica vem prejudicando varias pates várias partes do mundo. E a qual mais afetada é o país da Rússia na região Ártico, obtendo perdas importantes pra para o país e pondo a população em risco de vida.
+
+com Com esse transtorno climático certamente climático, certamente, o povo e os animas animais terão mudanças de comportamentos e gindo comportamento, agindo de formas totalmente diferente do seus cotidiano em em busca de sua própria sobrevivência.
+
+com Com essa mudança de clima clima, os urso polares polares, que são bem cogitados na Rússia, são os que não estão se adaptando ao novo clima, com isso ficando agressivos, invasivos e perigoso perigosos. O habitáte dos ursos não aparecem mais alimentos por conta da poucas de geladas, os urso ursos vão a à caça, afim a fim de saciar a fome, e com isso a população corre risco. Pois os ursos invade invadem regiões onde contem humanos e como eles estão famintos certamento vão ataca-los, assim como humos e tudo que eles ver com alimento ele vão fazer de tudo para comer, e é aí a onde mora o perigo.
+
+supostamente Supostamente, a Rússia já obteve a ideia de sacrificar os Urso ursos para a proteção da população. Os uros ursos são poucos e com essa ideia entrariam em extinção, com esse acontecimento Rússia perderia a sua riqueza e cairia em esquecimento ao longo de anos a sua cultura, pois além do gelo os ursos polares são de grande importância ao país.
+
+Para amenizar ambas as partes prejudicadas predudicadas, é importante manter os habitates sobre proteção responsavél com avisos espalhados de riscos e manter a distância e aderir alguma maneira de pelo menos alimentar os ursos, tal como espalhar alimentos derivados a eles ao redor do hábitate deles. Assim diminuir ou prolongar tragédias maiores que a estão surgindo. Desejando a volta da melhoria Climática climática.
