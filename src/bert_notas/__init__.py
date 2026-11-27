@@ -2,7 +2,13 @@
 from __future__ import annotations
 
 from .download import HF_REPO_ID, baixar_modelo
-from .inference import DEFAULT_MAX_TOTAL_TOKENS, MAX_TOKENS, construir_janelas, estimar
+from .inference import (
+    DEFAULT_MAX_TOTAL_TOKENS,
+    MAX_TOKENS,
+    construir_janelas,
+    construir_janelas_com_pesos,
+    estimar,
+)
 from .validation import (
     COMPETENCIAS,
     ajustado as _ajustado,
@@ -26,6 +32,7 @@ __all__ = [
     "_rotulos_validos",
     "baixar_modelo",
     "construir_janelas",
+    "construir_janelas_com_pesos",
     "estimar",
     "instalado",
     "motivo_indisponivel",

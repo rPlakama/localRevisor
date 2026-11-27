@@ -7,13 +7,57 @@ from .. import paths
 from .validation import COMPETENCIAS, pasta, rotulos_padrao
 
 MAX_TOKENS = 512
-DEFAULT_MAX_TOTAL_TOKENS = 4096
+DEFAULT_MAX_TOTAL_TOKENS = 2048
 WINDOW_OVERLAP = 128
 
 _trava = threading.Lock()  # uma estimativa por vez, mesmo com correções paralelas
 _modelo = None
 _tokenizador = None
 _ordem = list(range(5))
+
+
+def construir_janelas_com_pesos(
+    token_ids: list[int],
+    *,
+    window_size: int = MAX_TOKENS,
+    max_total_tokens: int = DEFAULT_MAX_TOTAL_TOKENS,
+    overlap: int = WINDOW_OVERLAP,
+) -> tuple[list[tuple[list[int], int]], bool]:
+    """Divide token_ids em janelas sobrepostas e devolve o peso de tokens novos.
+
+    Cada janela recebe peso proporcional apenas aos tokens *novos* (ainda não
+    cobertos por janelas anteriores). Isso evita que, em redações pouco maiores
+    que 512 tokens, uma janela ancorada no final — que começa no meio de uma
+    frase e se sobrepõe em ~90% à primeira — receba o mesmo peso de 50% da
+    janela principal (treinada a partir do início da redação).
+    """
+    content_size = max(1, window_size - 2)
+    max_content = max(content_size, max_total_tokens - 2)
+    cortada = len(token_ids) > max_content
+    usados = token_ids[:max_content]
+    if len(usados) <= content_size:
+        return [(usados, max(1, len(usados)))], cortada
+
+    effective_overlap = min(overlap, content_size // 4)
+    stride = max(1, content_size - effective_overlap)
+    janelas: list[tuple[list[int], int]] = []
+    inicio = 0
+    total = len(usados)
+    cobertos_ate = 0
+    while inicio < total:
+        fim = min(inicio + content_size, total)
+        if fim == total:
+            # Ancora a última janela no final para manter contexto cheio da conclusão,
+            # mas pondera apenas pela parcela ainda não coberta.
+            trecho = usados[total - content_size : total]
+            peso = max(1, total - cobertos_ate)
+            janelas.append((trecho, peso))
+            break
+        peso = max(1, fim - cobertos_ate)
+        janelas.append((usados[inicio:fim], peso))
+        cobertos_ate = max(cobertos_ate, fim)
+        inicio += stride
+    return janelas, cortada
 
 
 def construir_janelas(
@@ -29,27 +73,13 @@ def construir_janelas(
     cabe em ``max_total_tokens``, todas as partes — inclusive a conclusão — são
     cobertas por janelas sobrepostas e ``cortada`` é ``False``.
     """
-    content_size = max(1, window_size - 2)
-    max_content = max(content_size, max_total_tokens - 2)
-    cortada = len(token_ids) > max_content
-    usados = token_ids[:max_content]
-    if len(usados) <= content_size:
-        return [usados], cortada
-
-    effective_overlap = min(overlap, content_size // 4)
-    stride = max(1, content_size - effective_overlap)
-    janelas: list[list[int]] = []
-    inicio = 0
-    total = len(usados)
-    while inicio < total:
-        fim = min(inicio + content_size, total)
-        if fim == total:
-            # Ancora a última janela no final para manter contexto cheio da conclusão.
-            janelas.append(usados[total - content_size : total])
-            break
-        janelas.append(usados[inicio:fim])
-        inicio += stride
-    return janelas, cortada
+    janelas_com_pesos, cortada = construir_janelas_com_pesos(
+        token_ids,
+        window_size=window_size,
+        max_total_tokens=max_total_tokens,
+        overlap=overlap,
+    )
+    return [janela for janela, _ in janelas_com_pesos], cortada
 
 
 def _mapear_rotulos(modelo) -> list[int]:
@@ -150,13 +180,13 @@ def estimar(
             getattr(modelo.config, "max_position_embeddings", MAX_TOKENS) or MAX_TOKENS
         )
         token_ids = tokenizador.encode(texto, add_special_tokens=False)
-        janelas, cortada = construir_janelas(
+        janelas_com_pesos, cortada = construir_janelas_com_pesos(
             token_ids,
             window_size=window_size,
             max_total_tokens=limite_total,
         )
 
-        if len(janelas) == 1:
+        if len(janelas_com_pesos) == 1:
             entrada = tokenizador(
                 texto, truncation=True, max_length=window_size, return_tensors="pt"
             )
@@ -166,7 +196,7 @@ def estimar(
             predicoes = []
             pesos = []
             with torch.no_grad():
-                for janela in janelas:
+                for janela, peso in janelas_com_pesos:
                     input_ids = _envolver_tokens_especiais(tokenizador, janela)
                     entrada = {
                         "input_ids": torch.tensor([input_ids], dtype=torch.long),
@@ -176,7 +206,7 @@ def estimar(
                     }
                     logits = modelo(**entrada).logits[0].detach().cpu().numpy()
                     predicoes.append(logits)
-                    pesos.append(len(janela))
+                    pesos.append(peso)
             bruto = np.average(np.stack(predicoes, axis=0), axis=0, weights=pesos)
 
         if bruto.shape[0] != 5:

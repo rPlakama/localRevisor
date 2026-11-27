@@ -135,6 +135,26 @@ class BertValidationTests(unittest.TestCase):
         self.assertGreaterEqual(len(janelas), 4)
         self.assertEqual(janelas[-1][-1], 2045)
 
+    def test_construir_janelas_com_pesos_weights_by_uncovered_tokens(self):
+        # 545 tokens: janela 0 cobre 510 tokens novos; janela 1 (ancorada no fim)
+        # acrescenta apenas 35 tokens inéditos e não deve ter peso 510 (50%).
+        janelas_545, cortada = bert_notas.construir_janelas_com_pesos(
+            list(range(545)), window_size=512, max_total_tokens=2048
+        )
+        self.assertFalse(cortada)
+        self.assertEqual([peso for _, peso in janelas_545], [510, 35])
+
+        # 1000 tokens com effective_overlap = 510 // 4 = 127 e stride = 383:
+        # [0:510], [383:893], [490:1000] -> pesos novos [510, 383, 107] (soma 1000).
+        janelas_1000, cortada = bert_notas.construir_janelas_com_pesos(
+            list(range(1000)), window_size=512, max_total_tokens=2048
+        )
+        self.assertFalse(cortada)
+        self.assertEqual([peso for _, peso in janelas_1000], [510, 383, 107])
+
+    def test_default_max_total_tokens_matches_documented_default(self):
+        self.assertEqual(bert_notas.DEFAULT_MAX_TOTAL_TOKENS, 2048)
+
 
 if __name__ == "__main__":
     unittest.main()
